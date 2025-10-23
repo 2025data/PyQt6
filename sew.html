@@ -1,0 +1,495 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Kindle Drawing Pad</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      height: 100%;
+      background: #fff;
+      font-family: sans-serif;
+      overflow: hidden;
+    }
+    #toolbar {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 6px;
+      padding: 4px;
+      border-bottom: 1px solid #000;
+      background: #f8f8f8;
+      font-size: 0.9em;
+      height: 36px;
+    }
+    select, button {
+      font-size: 1em;
+      padding: 2px 6px;
+    }
+    #pad {
+      display: block;
+      margin: 0;
+      width: 100vw;
+      height: calc(100vh - 36px); /* fills below the toolbar */
+      touch-action: none;
+      background: #fff;
+    }
+  </style>
+</head>
+<body>
+  <div id="toolbar">
+    <select id="color">
+      <option value="#000000" selected>Black</option>
+      <option value="#333333">Dark Gray</option>
+      <option value="#666666">Gray</option>
+      <option value="#999999">Light Gray</option>
+      <option value="#CCCCCC">Lighter Gray</option>
+      <option value="#FFFFFF">White</option>
+    </select>
+    <select id="width">
+      <option value="1">1 px</option>
+      <option value="2">2 px</option>
+      <option value="4">4 px</option>
+      <option value="7">7 px</option>
+      <option value="12" selected>12 px</option>
+      <option value="20">20 px</option>
+      <option value="33">33 px</option>
+      <option value="55">55 px</option>
+      <option value="92">92 px</option>
+      <option value="153">153 px</option>
+      <option value="300">300 px</option>
+    </select>
+    <select id="mirror">
+      <option value="none" selected>None</option>
+      <option value="bilateral">Bi-lateral</option>
+      <option value="radial">Radial</option>
+      <option value="quad">Quad</option>
+    </select>
+    <button id="clear">🧹 Clear</button>
+    <button id="sew">🧵 Download</button>
+    <button id="copy">📋 Copy JSON</button>
+    <button id="qr">📱 QR Code</button>
+  </div>
+
+  <canvas id="pad"></canvas>
+  
+  <div id="json-modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); z-index:1000;">
+    <div style="background:white; margin:20px; padding:20px; max-height:90%; overflow:auto;">
+      <h3>JSON Data (Copy and paste to PC)</h3>
+      <button onclick="document.getElementById('json-modal').style.display='none'" style="float:right;">✕ Close</button>
+      <textarea id="json-text" style="width:100%; height:400px; font-family:monospace; font-size:10px;"></textarea>
+      <button onclick="navigator.clipboard.writeText(document.getElementById('json-text').value).then(()=>alert('Copied!'))" style="width:100%; margin-top:10px; padding:10px; font-size:16px;">📋 Copy to Clipboard</button>
+    </div>
+  </div>
+
+  <div id="qr-modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); z-index:1000;">
+    <div style="background:white; margin:20px; padding:20px; text-align:center; max-height:90%; overflow:auto;">
+      <h3>QR Code - Scan with Phone</h3>
+      <button onclick="document.getElementById('qr-modal').style.display='none'" style="float:right;">✕ Close</button>
+      <p>Scan this with your phone's camera or QR app</p>
+      <div id="qr-code" style="margin:20px auto;"></div>
+      <p style="font-size:12px; color:#666;">After scanning, the JSON data will be available to copy/download on your phone</p>
+    </div>
+  </div>
+
+  <script>
+    const c = document.getElementById('pad');
+    const ctx = c.getContext('2d');
+    const widthSel = document.getElementById('width');
+    const colorSel = document.getElementById('color');
+    const mirrorSel = document.getElementById('mirror');
+    const clearBtn = document.getElementById('clear');
+    const sewBtn = document.getElementById('sew');
+    const copyBtn = document.getElementById('copy');
+    const qrBtn = document.getElementById('qr');
+
+    function resizeCanvas() {
+      c.width = window.innerWidth;
+      c.height = window.innerHeight - document.getElementById('toolbar').offsetHeight;
+      drawGuides();
+    }
+    window.addEventListener('resize', resizeCanvas);
+    resizeCanvas();
+
+    ctx.strokeStyle = colorSel.value;
+    ctx.fillStyle = colorSel.value;
+    ctx.lineWidth = parseInt(widthSel.value);
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+
+    let drawing = false;
+    let lastX = 0, lastY = 0;
+    let hasMoved = false;
+    let holdTimer = null;
+
+    // Stroke data storage
+    let allStrokes = [];
+    let currentStroke = null;
+
+    function drawGuides() {
+      const mode = mirrorSel.value;
+      const centerX = c.width / 2;
+      const centerY = c.height / 2;
+      
+      // Clear old guides and redraw canvas content would be complex,
+      // so we just draw subtle guide lines
+      const oldStyle = ctx.strokeStyle;
+      const oldWidth = ctx.lineWidth;
+      
+      ctx.strokeStyle = '#ddd';
+      ctx.lineWidth = 1;
+      ctx.setLineDash([5, 5]);
+      
+      if (mode === 'bilateral') {
+        ctx.beginPath();
+        ctx.moveTo(centerX, 0);
+        ctx.lineTo(centerX, c.height);
+        ctx.stroke();
+      } else if (mode === 'quad') {
+        ctx.beginPath();
+        ctx.moveTo(centerX, 0);
+        ctx.lineTo(centerX, c.height);
+        ctx.moveTo(0, centerY);
+        ctx.lineTo(c.width, centerY);
+        ctx.stroke();
+      } else if (mode === 'radial') {
+        // Draw 8 radial lines
+        for (let i = 0; i < 8; i++) {
+          const angle = (i * Math.PI) / 4;
+          ctx.beginPath();
+          ctx.moveTo(centerX, centerY);
+          ctx.lineTo(
+            centerX + Math.cos(angle) * Math.max(c.width, c.height),
+            centerY + Math.sin(angle) * Math.max(c.width, c.height)
+          );
+          ctx.stroke();
+        }
+      }
+      
+      ctx.setLineDash([]);
+      ctx.strokeStyle = oldStyle;
+      ctx.lineWidth = oldWidth;
+    }
+
+    function getPos(e) {
+      const rect = c.getBoundingClientRect();
+      const touch = e.touches[0];
+      return {x: touch.clientX - rect.left, y: touch.clientY - rect.top};
+    }
+
+    function drawDot(x, y) {
+      const mode = mirrorSel.value;
+      const centerX = c.width / 2;
+      const centerY = c.height / 2;
+      
+      // Original dot
+      ctx.beginPath();
+      ctx.arc(x, y, ctx.lineWidth / 2, 0, Math.PI * 2);
+      ctx.fill();
+      
+      // Mirror dots based on mode
+      if (mode === 'bilateral') {
+        const mirrorX = c.width - x;
+        ctx.beginPath();
+        ctx.arc(mirrorX, y, ctx.lineWidth / 2, 0, Math.PI * 2);
+        ctx.fill();
+      } else if (mode === 'quad') {
+        const mirrorX = c.width - x;
+        const mirrorY = c.height - y;
+        ctx.beginPath();
+        ctx.arc(mirrorX, y, ctx.lineWidth / 2, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(x, mirrorY, ctx.lineWidth / 2, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(mirrorX, mirrorY, ctx.lineWidth / 2, 0, Math.PI * 2);
+        ctx.fill();
+      } else if (mode === 'radial') {
+        // 8-way radial symmetry
+        const dx = x - centerX;
+        const dy = y - centerY;
+        const angle = Math.atan2(dy, dx);
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        
+        for (let i = 0; i < 8; i++) {
+          const newAngle = (i * Math.PI) / 4;
+          const nx = centerX + Math.cos(newAngle) * dist;
+          const ny = centerY + Math.sin(newAngle) * dist;
+          ctx.beginPath();
+          ctx.arc(nx, ny, ctx.lineWidth / 2, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+    }
+
+    function drawLine(x1, y1, x2, y2) {
+      const mode = mirrorSel.value;
+      const centerX = c.width / 2;
+      const centerY = c.height / 2;
+      
+      // Original line
+      ctx.beginPath();
+      ctx.moveTo(x1, y1);
+      ctx.lineTo(x2, y2);
+      ctx.stroke();
+      
+      // Mirror lines based on mode
+      if (mode === 'bilateral') {
+        const mirrorX1 = c.width - x1;
+        const mirrorX2 = c.width - x2;
+        ctx.beginPath();
+        ctx.moveTo(mirrorX1, y1);
+        ctx.lineTo(mirrorX2, y2);
+        ctx.stroke();
+      } else if (mode === 'quad') {
+        const mirrorX1 = c.width - x1;
+        const mirrorX2 = c.width - x2;
+        const mirrorY1 = c.height - y1;
+        const mirrorY2 = c.height - y2;
+        
+        ctx.beginPath();
+        ctx.moveTo(mirrorX1, y1);
+        ctx.lineTo(mirrorX2, y2);
+        ctx.stroke();
+        
+        ctx.beginPath();
+        ctx.moveTo(x1, mirrorY1);
+        ctx.lineTo(x2, mirrorY2);
+        ctx.stroke();
+        
+        ctx.beginPath();
+        ctx.moveTo(mirrorX1, mirrorY1);
+        ctx.lineTo(mirrorX2, mirrorY2);
+        ctx.stroke();
+      } else if (mode === 'radial') {
+        // 8-way radial symmetry
+        const dx1 = x1 - centerX;
+        const dy1 = y1 - centerY;
+        const dx2 = x2 - centerX;
+        const dy2 = y2 - centerY;
+        const dist1 = Math.sqrt(dx1 * dx1 + dy1 * dy1);
+        const dist2 = Math.sqrt(dx2 * dx2 + dy2 * dy2);
+        const angle1 = Math.atan2(dy1, dx1);
+        const angle2 = Math.atan2(dy2, dx2);
+        
+        for (let i = 0; i < 8; i++) {
+          const newAngle = (i * Math.PI) / 4;
+          const angleDiff = angle2 - angle1;
+          
+          const nx1 = centerX + Math.cos(newAngle) * dist1;
+          const ny1 = centerY + Math.sin(newAngle) * dist1;
+          const nx2 = centerX + Math.cos(newAngle + angleDiff) * dist2;
+          const ny2 = centerY + Math.sin(newAngle + angleDiff) * dist2;
+          
+          ctx.beginPath();
+          ctx.moveTo(nx1, ny1);
+          ctx.lineTo(nx2, ny2);
+          ctx.stroke();
+        }
+      }
+    }
+
+    c.addEventListener('touchstart', e => {
+      drawing = true;
+      hasMoved = false;
+      const {x, y} = getPos(e);
+      lastX = x; lastY = y;
+      
+      // Start new stroke
+      currentStroke = {
+        coordinates: [[x, y]],
+        color: colorSel.value,
+        width: parseInt(widthSel.value),
+        mirror: mirrorSel.value,
+        type: 'line'
+      };
+      
+      // Set timer to draw a dot if user holds still
+      holdTimer = setTimeout(() => {
+        if (!hasMoved && drawing) {
+          drawDot(x, y);
+          currentStroke.type = 'dot';
+        }
+      }, 150);
+      
+      e.preventDefault();
+    });
+
+    c.addEventListener('touchend', e => {
+      drawing = false;
+      clearTimeout(holdTimer);
+      
+      // If no movement occurred, draw a dot
+      if (!hasMoved) {
+        drawDot(lastX, lastY);
+        currentStroke.type = 'dot';
+      }
+      
+      // Save the stroke
+      if (currentStroke && currentStroke.coordinates.length > 0) {
+        allStrokes.push(currentStroke);
+        currentStroke = null;
+      }
+      
+      e.preventDefault();
+    });
+
+    c.addEventListener('touchmove', e => {
+      if (!drawing) return;
+      hasMoved = true;
+      clearTimeout(holdTimer);
+      
+      const {x, y} = getPos(e);
+      
+      // Add coordinate to current stroke
+      if (currentStroke) {
+        currentStroke.coordinates.push([x, y]);
+      }
+      
+      // Calculate distance for smoother lines
+      const dx = x - lastX;
+      const dy = y - lastY;
+      const distance = Math.sqrt(dx * dx + dy * dy);
+      
+      // For slow movements, add intermediate points
+      if (distance > 0) {
+        const steps = Math.max(1, Math.ceil(distance / 2));
+        
+        for (let i = 1; i <= steps; i++) {
+          const t = i / steps;
+          const ix = lastX + dx * t;
+          const iy = lastY + dy * t;
+          const prevIx = lastX + dx * (i - 1) / steps;
+          const prevIy = lastY + dy * (i - 1) / steps;
+          
+          drawLine(prevIx, prevIy, ix, iy);
+        }
+      }
+      
+      lastX = x; lastY = y;
+      e.preventDefault();
+    });
+
+    // Change line width
+    widthSel.addEventListener('change', () => {
+      ctx.lineWidth = parseInt(widthSel.value);
+    });
+
+    // Change color
+    colorSel.addEventListener('change', () => {
+      ctx.strokeStyle = colorSel.value;
+      ctx.fillStyle = colorSel.value;
+    });
+
+    // Change mirror mode
+    mirrorSel.addEventListener('change', () => {
+      ctx.clearRect(0, 0, c.width, c.height);
+      drawGuides();
+    });
+
+    // Clear canvas
+    clearBtn.addEventListener('click', () => {
+      ctx.clearRect(0, 0, c.width, c.height);
+      drawGuides();
+      allStrokes = []; // Clear stroke data
+    });
+
+    // Download drawing as JSON file
+    sewBtn.addEventListener('click', () => {
+      if (allStrokes.length === 0) {
+        alert('No drawing to send!');
+        return;
+      }
+
+      const drawingData = {
+        width: c.width,
+        height: c.height,
+        strokes: allStrokes,
+        timestamp: new Date().toISOString()
+      };
+
+      // Create filename with timestamp
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+      const filename = `drawing_${timestamp}.json`;
+
+      // Create blob and download
+      const blob = new Blob([JSON.stringify(drawingData, null, 2)], {
+        type: 'application/json'
+      });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      a.click();
+      URL.revokeObjectURL(url);
+
+      alert('Drawing saved as: ' + filename);
+    });
+
+    // Show JSON in copyable modal
+    copyBtn.addEventListener('click', () => {
+      if (allStrokes.length === 0) {
+        alert('No drawing to copy!');
+        return;
+      }
+
+      const drawingData = {
+        width: c.width,
+        height: c.height,
+        strokes: allStrokes,
+        timestamp: new Date().toISOString()
+      };
+
+      const jsonText = JSON.stringify(drawingData, null, 2);
+      document.getElementById('json-text').value = jsonText;
+      document.getElementById('json-modal').style.display = 'block';
+    });
+
+    // Generate QR Code with JSON data
+    qrBtn.addEventListener('click', () => {
+      if (allStrokes.length === 0) {
+        alert('No drawing to encode!');
+        return;
+      }
+
+      const drawingData = {
+        width: c.width,
+        height: c.height,
+        strokes: allStrokes,
+        timestamp: new Date().toISOString()
+      };
+
+      const jsonText = JSON.stringify(drawingData);
+      
+      // Check size
+      if (jsonText.length > 2900) {
+        alert('Drawing is too complex for QR code! Try:\n1. Using "Save" button to download\n2. Using "Copy JSON" to copy/paste\n3. Drawing something simpler');
+        return;
+      }
+
+      // Clear previous QR code
+      const qrDiv = document.getElementById('qr-code');
+      qrDiv.innerHTML = '';
+
+      // Generate QR code
+      try {
+        new QRCode(qrDiv, {
+          text: jsonText,
+          width: 400,
+          height: 400,
+          colorDark: '#000000',
+          colorLight: '#ffffff',
+          correctLevel: QRCode.CorrectLevel.L
+        });
+        document.getElementById('qr-modal').style.display = 'block';
+      } catch (error) {
+        alert('Error generating QR code. Drawing may be too complex.');
+      }
+    });
+  </script>
+</body>
+</html>
