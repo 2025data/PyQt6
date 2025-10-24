@@ -21,7 +21,7 @@ MAX_CONCURRENT_WORKERS = 8
 
 CLIENT_ID = 'QuwJpBozcnP3KUAZFpTbdVQwy85GhWTtqIA19PZjQbYKDpGN'
 CLIENT_SECRET = '8AUhAiqEB9kOz5eMcDWEGGtMLDKKZOxEkCLyaJAIfbGwCUC1HqjQRBa4wmsygG2b'
-PROJECT_ID = 'b.1d82500b-db5d-4026-9603-2f386c22d664'
+PROJECT_ID = 'b.fd51fd8c-27ec-4d55-9572-e705effe0b95'
 HUB_ID = 'b.0f682712-9953-4a8a-9c34-0ece721e7b0e'
 BASE_URL = 'https://developer.api.autodesk.com'
 
@@ -1056,6 +1056,9 @@ class App(QWidget):
 
         self.btn_refresh.setShortcut("F5")
         self.btn_open.setShortcut("F7")
+        
+        # Debug shortcut to test multi-project access
+        self.btn_verbose.setShortcut("F9")
 
         self._log("🎯 Enhanced Revit Viewer Ready!")
         self._log("✨ Features: Cached Search → Enhanced Viewer → Browser Downloads → Extraction Profiles")
@@ -1068,9 +1071,39 @@ class App(QWidget):
         self._log("   1. Search for files (F5)")
         self._log("   2. Select multiple files (Ctrl+Click)")
         self._log("   3. Save as Profile or Extract directly")
+        self._log("   F9: Test multi-project access (debug)")
         
         # Load cache on startup
         self._load_cache_if_valid()
+
+    def test_multi_project_access(self):
+        """Test access to multiple projects - debug function"""
+        self._log("🔍 Testing multi-project access...")
+        try:
+            hubs = get_hubs(self.token)
+            self._log(f"✅ Found {len(hubs)} hubs")
+            
+            for hub in hubs:
+                self._log(f"  Hub: {hub['name']} ({hub['id']})")
+                projects = get_projects(self.token, hub['id'])
+                self._log(f"    Projects: {len(projects)}")
+                
+                for i, project in enumerate(projects[:3]):  # Test first 3 projects
+                    self._log(f"    {i+1}. {project['name']} ({project['id']})")
+                    # Test if we can access the project
+                    try:
+                        test_files = self._fetch_project_revit_files(project['id'], hub['id'])
+                        self._log(f"       Access: ✅ ({len(test_files)} files)")
+                    except Exception as e:
+                        self._log(f"       Access: ❌ {e}")
+                        
+                if len(projects) > 3:
+                    self._log(f"    ... and {len(projects) - 3} more projects")
+                    
+        except Exception as e:
+            self._log(f"❌ Multi-project test failed: {e}")
+            import traceback
+            self._log(f"Full traceback: {traceback.format_exc()}")
 
     def _update_files(self, revits):
         self.revits = revits; self.listbox.clear()
@@ -1097,6 +1130,13 @@ class App(QWidget):
     
     def toggle_verbose(self):
         """Toggle verbose debug logging"""
+        # Check if Shift is held to trigger test mode
+        from PySide6.QtWidgets import QApplication
+        modifiers = QApplication.keyboardModifiers()
+        if modifiers & Qt.ShiftModifier:
+            self.test_multi_project_access()
+            return
+            
         self.verbose_logging = not self.verbose_logging
         if self.verbose_logging:
             self.btn_verbose.setText("🐛 Debug Logging: ON")
@@ -1104,6 +1144,8 @@ class App(QWidget):
         else:
             self.btn_verbose.setText("🐛 Debug Logging: OFF")
             self._log("🔇 Verbose logging disabled - minimal output during extraction")
+        
+        self._log("💡 Tip: Shift+F9 to test multi-project access")
 
     def refresh_revits(self):
         # Try loading from cache first
@@ -1380,6 +1422,8 @@ class App(QWidget):
                 break
             
             self._log(f"📂 Scanning project: {project['name']}")
+            self._log(f"   Project ID: {project['id']}")
+            self._log(f"   Hub ID: {project['hub_id']}")
             
             # Fetch Revit files for this project
             try:
@@ -1394,8 +1438,17 @@ class App(QWidget):
                 })
                 
                 self._log(f"  ✓ {project['name']}: {len(project_files)} Revit files")
+                if len(project_files) > 0:
+                    # Log first few files as examples
+                    for i, file_info in enumerate(project_files[:3]):
+                        self._log(f"    - {file_info['name']}")
+                    if len(project_files) > 3:
+                        self._log(f"    ... and {len(project_files) - 3} more files")
+                        
             except Exception as e:
-                self._log(f"  ⚠️ {project['name']}: Error - {e}")
+                self._log(f"  ❌ {project['name']}: Error - {e}")
+                import traceback
+                self._log(f"  Full error: {traceback.format_exc()}")
                 # Continue with empty file list for this project
                 profile_projects.append({
                     'project_id': project['id'],
@@ -1453,16 +1506,35 @@ class App(QWidget):
         
         try:
             # Get project's top folders
+            self._log(f"   Getting top folders for project {project_id}")
+            self._log(f"   Hub ID: {hub_id}")
+            self._log(f"   Using token: {self.token[:20]}...")
+            
+            url = f"{BASE_URL}/project/v1/hubs/{hub_id}/projects/{project_id}/topFolders"
+            self._log(f"   API URL: {url}")
+            
             response = make_request_with_retry(
                 session.get,
-                f"{BASE_URL}/project/v1/hubs/{hub_id}/projects/{project_id}/topFolders",
+                url,
                 headers={'Authorization': f'Bearer {self.token}'},
                 timeout=HTTP_TIMEOUT
             )
+            
+            self._log(f"   API Response Status: {response.status_code}")
+            
+            if response.status_code != 200:
+                self._log(f"   API Response Text: {response.text}")
+                
             response.raise_for_status()
             folders = response.json().get('data', [])
             
             self._log(f"   Found {len(folders)} top-level folders")
+            
+            # Log folder names for debugging
+            if folders:
+                for folder in folders:
+                    folder_name = folder.get('attributes', {}).get('displayName', 'Unknown')
+                    self._log(f"     - {folder_name}")
             
             # Search recursively for Revit files
             for folder in folders:
@@ -1472,22 +1544,35 @@ class App(QWidget):
                     
                 folder_id = folder['id']
                 folder_name = folder.get('attributes', {}).get('displayName', 'Unknown')
+                
+                # Skip non-Revit folders to speed up scanning
+                if not is_likely_revit_folder(folder_name):
+                    self._log(f"   Skipping folder: {folder_name} (non-Revit)")
+                    continue
+                    
                 self._log(f"   Scanning folder: {folder_name}")
                 QApplication.processEvents()  # Keep UI responsive
                 
-                self._search_folder_for_revits(project_id, folder_id, revit_files, progress)
+                self._search_folder_for_revits(project_id, folder_id, revit_files, progress, folder_name)
+            
+            self._log(f"   Total files found in project: {len(revit_files)}")
             
         except Exception as e:
-            self._log(f"   Error fetching files from project {project_id}: {e}")
+            self._log(f"   ❌ Error fetching files from project {project_id}: {e}")
+            # Log more details for debugging
+            self._log(f"   Hub ID: {hub_id}")
+            self._log(f"   Project ID: {project_id}")
+            import traceback
+            self._log(f"   Full traceback: {traceback.format_exc()}")
             print(f"Error fetching files from project {project_id}: {e}")
         
         return revit_files
     
-    def _search_folder_for_revits(self, project_id, folder_id, results, progress=None, depth=0):
+    def _search_folder_for_revits(self, project_id, folder_id, results, progress=None, folder_path="", depth=0):
         """Recursively search folder for Revit files"""
         # Limit recursion depth to prevent infinite loops
         if depth > 10:
-            self._log(f"     ⚠️ Max folder depth reached (10 levels)")
+            self._log(f"     ⚠️ Max folder depth reached (10 levels) in {folder_path}")
             return
             
         try:
@@ -1509,7 +1594,7 @@ class App(QWidget):
                           and item.get('attributes', {}).get('displayName', '').lower().endswith('.rvt'))
             
             if rvt_count > 0:
-                self._log(f"     Found {rvt_count} .rvt file(s)")
+                self._log(f"     Found {rvt_count} .rvt file(s) in {folder_path}")
                 QApplication.processEvents()
             
             for item in items:
@@ -1520,7 +1605,12 @@ class App(QWidget):
                 
                 # If it's a folder, search recursively
                 if item_type == 'folders':
-                    self._search_folder_for_revits(project_id, item['id'], results, progress, depth + 1)
+                    sub_folder_name = item.get('attributes', {}).get('displayName', 'Unknown')
+                    sub_folder_path = f"{folder_path}/{sub_folder_name}" if folder_path else sub_folder_name
+                    
+                    # Skip non-Revit folders
+                    if is_likely_revit_folder(sub_folder_name):
+                        self._search_folder_for_revits(project_id, item['id'], results, progress, sub_folder_path, depth + 1)
                 
                 # If it's a Revit file, add it
                 elif item_type == 'items':
@@ -1528,18 +1618,27 @@ class App(QWidget):
                     display_name = attrs.get('displayName', '')
                     
                     if display_name.lower().endswith('.rvt'):
-                        # Get version URN
-                        version_id = item.get('relationships', {}).get('tip', {}).get('data', {}).get('id')
-                        
-                        if version_id:
-                            results.append({
-                                'name': display_name,
-                                'item_id': item['id'],
-                                'version_urn': version_id
-                            })
+                        # Get version URN using the proper method
+                        try:
+                            version_urn = get_latest_version_urn(project_id, item['id'], self.token)
+                            
+                            if version_urn:
+                                file_info = {
+                                    'name': display_name,
+                                    'path': folder_path,
+                                    'full_path': f"{folder_path}/{display_name}" if folder_path else display_name,
+                                    'item_id': item['id'],
+                                    'version_urn': version_urn
+                                }
+                                results.append(file_info)
+                                self._log(f"     ✅ Added: {file_info['full_path']}")
+                            else:
+                                self._log(f"     ⚠️ No version found for: {display_name}")
+                        except Exception as e:
+                            self._log(f"     ❌ Error getting version for {display_name}: {e}")
         
         except Exception as e:
-            self._log(f"     Error searching folder {folder_id}: {e}")
+            self._log(f"     ❌ Error searching folder {folder_id}: {e}")
             print(f"Error searching folder {folder_id}: {e}")
     
     def save_profile_OLD(self):
