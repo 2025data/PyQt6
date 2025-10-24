@@ -1,0 +1,23 @@
+# IESViewerAudit.py Production Dependencies
+# Core dependencies for running the IES Viewer Audit application
+
+# Web framework and HTTP requests
+requests>=2.31.0
+
+# Qt framework for GUI
+PySide6>=6.5.0
+
+# Standard library modules (included with Python):
+# - base64
+# - json
+# - sys
+# - threading
+# - time
+# - signal
+# - os
+# - datetime
+# - concurrent.futures
+
+# Optional development dependencies:
+# - pytest (for testing)
+# - black (for code formatting)
