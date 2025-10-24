@@ -927,6 +927,7 @@ class App(QWidget):
         self.btn_clear_cache = QPushButton("🗑️ Clear Cache & Refresh")
         self.btn_open = QPushButton("🚀 Open Enhanced Viewer (F7)")
         self.btn_verbose = QPushButton("🐛 Debug Logging: OFF")
+        self.btn_test_projects = QPushButton("🔍 Test Multi-Project Access")
         
         # Profile management buttons
         self.btn_save_profile = QPushButton("💾 Save Selection as Profile")
@@ -1006,6 +1007,7 @@ class App(QWidget):
         self.btn_open.setStyleSheet(button_style)
         self.btn_clear_cache.setStyleSheet(cache_button_style)
         self.btn_verbose.setStyleSheet(verbose_button_style)
+        self.btn_test_projects.setStyleSheet(verbose_button_style)
         self.btn_save_profile.setStyleSheet(profile_button_style)
         self.btn_load_profile.setStyleSheet(profile_button_style)
         self.btn_extract_profile.setStyleSheet(profile_button_style)
@@ -1013,6 +1015,7 @@ class App(QWidget):
         left.addWidget(self.btn_refresh)
         left.addWidget(self.btn_clear_cache)
         left.addWidget(self.btn_verbose)
+        left.addWidget(self.btn_test_projects)
         
         # Add separator label
         profile_label = QLabel("📋 Extraction Profiles")
@@ -1049,6 +1052,7 @@ class App(QWidget):
         self.btn_clear_cache.clicked.connect(self.clear_cache_and_refresh)
         self.btn_open.clicked.connect(self.open_viewer)
         self.btn_verbose.clicked.connect(self.toggle_verbose)
+        self.btn_test_projects.clicked.connect(self.test_multi_project_access)
         self.btn_save_profile.clicked.connect(self.save_profile)
         self.btn_load_profile.clicked.connect(self.load_profile)
         self.btn_extract_profile.clicked.connect(self.extract_profile)
@@ -1056,9 +1060,6 @@ class App(QWidget):
 
         self.btn_refresh.setShortcut("F5")
         self.btn_open.setShortcut("F7")
-        
-        # Debug shortcut to test multi-project access
-        self.btn_verbose.setShortcut("F9")
 
         self._log("🎯 Enhanced Revit Viewer Ready!")
         self._log("✨ Features: Cached Search → Enhanced Viewer → Browser Downloads → Extraction Profiles")
@@ -1071,7 +1072,7 @@ class App(QWidget):
         self._log("   1. Search for files (F5)")
         self._log("   2. Select multiple files (Ctrl+Click)")
         self._log("   3. Save as Profile or Extract directly")
-        self._log("   F9: Test multi-project access (debug)")
+        self._log("   🔍 Use 'Test Multi-Project Access' button to debug project access")
         
         # Load cache on startup
         self._load_cache_if_valid()
@@ -1130,13 +1131,6 @@ class App(QWidget):
     
     def toggle_verbose(self):
         """Toggle verbose debug logging"""
-        # Check if Shift is held to trigger test mode
-        from PySide6.QtWidgets import QApplication
-        modifiers = QApplication.keyboardModifiers()
-        if modifiers & Qt.ShiftModifier:
-            self.test_multi_project_access()
-            return
-            
         self.verbose_logging = not self.verbose_logging
         if self.verbose_logging:
             self.btn_verbose.setText("🐛 Debug Logging: ON")
@@ -1144,8 +1138,6 @@ class App(QWidget):
         else:
             self.btn_verbose.setText("🐛 Debug Logging: OFF")
             self._log("🔇 Verbose logging disabled - minimal output during extraction")
-        
-        self._log("💡 Tip: Shift+F9 to test multi-project access")
 
     def refresh_revits(self):
         # Try loading from cache first
@@ -1772,6 +1764,33 @@ class App(QWidget):
         self._log(f"✅ Multi-project profile loaded: {profile_data['name']}")
         self._log(f"📊 {len(enabled_projects)} projects, {total_files} total files")
         
+        # Collect all files from all enabled projects into the main file list
+        all_profile_files = []
+        for project in enabled_projects:
+            for file_info in project['files']:
+                # Add project context to the file info
+                enhanced_file = file_info.copy()
+                enhanced_file['project_name'] = project['project_name']
+                enhanced_file['project_id'] = project['project_id']
+                enhanced_file['hub_id'] = project['hub_id']
+                all_profile_files.append(enhanced_file)
+        
+        # Update the main file list with profile files
+        self.revits = all_profile_files
+        self.listbox.clear()
+        
+        # Populate the listbox with multi-project files
+        for file_info in all_profile_files:
+            project_prefix = f"[{file_info['project_name']}] " if 'project_name' in file_info else ""
+            display_text = f"📐 {project_prefix}{file_info.get('full_path', file_info['name'])}"
+            self.listbox.addItem(display_text)
+        
+        # Select all files from the profile
+        for i in range(self.listbox.count()):
+            self.listbox.item(i).setSelected(True)
+        
+        self._log(f"📋 Populated file list with {len(all_profile_files)} files from {len(enabled_projects)} projects")
+        
         # Show summary
         project_summary = "\n".join(
             f"  • {p['project_name']}: {len(p['files'])} files"
@@ -1784,7 +1803,8 @@ class App(QWidget):
             f"Profile: {profile_data['name']}\n\n"
             f"Projects ({len(enabled_projects)}):\n{project_summary}\n\n"
             f"Total files: {total_files}\n\n"
-            f"Use 'Extract Profile' to process all files."
+            f"Files are now displayed in the list and pre-selected.\n"
+            f"You can view individual files or use 'Extract Profile' for batch processing."
         )
     
     def extract_profile(self):
