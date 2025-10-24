@@ -933,6 +933,7 @@ class App(QWidget):
         self.btn_save_profile = QPushButton("💾 Save Selection as Profile")
         self.btn_load_profile = QPushButton("📂 Load Profile")
         self.btn_extract_profile = QPushButton("⚡ Extract Profile")
+        self.btn_discover_projects = QPushButton("🔍 Discover Multi-Project Files")
         
         # Style buttons
         button_style = """
@@ -1011,6 +1012,7 @@ class App(QWidget):
         self.btn_save_profile.setStyleSheet(profile_button_style)
         self.btn_load_profile.setStyleSheet(profile_button_style)
         self.btn_extract_profile.setStyleSheet(profile_button_style)
+        self.btn_discover_projects.setStyleSheet(profile_button_style)
         
         left.addWidget(self.btn_refresh)
         left.addWidget(self.btn_clear_cache)
@@ -1025,6 +1027,7 @@ class App(QWidget):
         left.addWidget(self.btn_save_profile)
         left.addWidget(self.btn_load_profile)
         left.addWidget(self.btn_extract_profile)
+        left.addWidget(self.btn_discover_projects)
         
         left.addWidget(self.btn_open)
 
@@ -1056,6 +1059,7 @@ class App(QWidget):
         self.btn_save_profile.clicked.connect(self.save_profile)
         self.btn_load_profile.clicked.connect(self.load_profile)
         self.btn_extract_profile.clicked.connect(self.extract_profile)
+        self.btn_discover_projects.clicked.connect(self.discover_multi_project_files)
         self.listbox.currentRowChanged.connect(self._on_select)
 
         self.btn_refresh.setShortcut("F5")
@@ -1069,9 +1073,10 @@ class App(QWidget):
         self._log(f"⚙️  Settings: Extraction delay = {self.extraction_delay_seconds}s, Max retries = {self.max_retries}")
         self._log("")
         self._log("💡 Quick Start:")
-        self._log("   1. Search for files (F5)")
-        self._log("   2. Select multiple files (Ctrl+Click)")
-        self._log("   3. Save as Profile or Extract directly")
+        self._log("   1. Search for files (F5) OR Discover Multi-Project Files")
+        self._log("   2. Select specific files (Ctrl+Click)")
+        self._log("   3. Save Selection as Profile")
+        self._log("   4. Load Profile or Extract directly")
         self._log("   🔍 Use 'Test Multi-Project Access' button to debug project access")
         
         # Load cache on startup
@@ -1312,25 +1317,8 @@ class App(QWidget):
     # ===== PROFILE MANAGEMENT =====
     
     def save_profile(self):
-        """Save currently selected files as an extraction profile (legacy single-project)"""
-        # Ask if user wants multi-project or single-project profile
-        reply = QMessageBox.question(
-            self,
-            "Profile Type",
-            "Create multi-project profile?\n\n"
-            "• Yes = Select from all accessible projects\n"
-            "• No = Use only current project's selected files",
-            QMessageBox.Yes | QMessageBox.No,
-            QMessageBox.Yes
-        )
-        
-        if reply == QMessageBox.Yes:
-            self.save_multi_project_profile()
-        else:
-            self.save_single_project_profile()
-    
-    def save_single_project_profile(self):
-        """Save profile with files from current project only"""
+        """Save currently selected files as an extraction profile"""
+        # Get currently selected files
         selected_indices = [i for i in range(self.listbox.count()) 
                            if self.listbox.item(i).isSelected()]
         
@@ -1338,26 +1326,42 @@ class App(QWidget):
             QMessageBox.warning(self, "No Selection", "Please select at least one file to save as a profile.")
             return
         
+        selected_files = [self.revits[i] for i in selected_indices]
+        
+        # Check if files are from multiple projects
+        projects_in_selection = set()
+        for file_info in selected_files:
+            if 'project_id' in file_info:
+                projects_in_selection.add((file_info['project_id'], file_info.get('project_name', 'Unknown')))
+        
+        if len(projects_in_selection) > 1:
+            # Multi-project selection
+            self._save_multi_project_selection_profile(selected_files, projects_in_selection)
+        else:
+            # Single project selection
+            self._save_single_project_selection_profile(selected_files)
+    
+    def _save_single_project_selection_profile(self, selected_files):
+        """Save selected files from single project"""
         # Get profile name from user
         profile_name, ok = QInputDialog.getText(
             self, 
             "Save Extraction Profile",
-            f"Enter profile name ({len(selected_indices)} files selected):"
+            f"Enter profile name ({len(selected_files)} files selected):"
         )
         
         if not ok or not profile_name:
             return
         
         # Build profile data with single project
-        selected_files = [self.revits[i] for i in selected_indices]
         profile_data = {
             'name': profile_name,
             'created': datetime.now().isoformat(),
             'version': 2,  # Version 2 supports multi-project
             'projects': [{
-                'project_id': PROJECT_ID,
-                'project_name': 'Current Project',
-                'hub_id': HUB_ID,
+                'project_id': selected_files[0].get('project_id', PROJECT_ID),
+                'project_name': selected_files[0].get('project_name', 'Current Project'),
+                'hub_id': selected_files[0].get('hub_id', HUB_ID),
                 'enabled': True,
                 'files': selected_files
             }]
@@ -1366,8 +1370,53 @@ class App(QWidget):
         # Save to file
         self._save_profile_to_file(profile_name, profile_data)
     
-    def save_multi_project_profile(self):
-        """Create profile by selecting projects and their files"""
+    def _save_multi_project_selection_profile(self, selected_files, projects_in_selection):
+        """Save selected files from multiple projects"""
+        # Get profile name from user
+        profile_name, ok = QInputDialog.getText(
+            self, 
+            "Save Multi-Project Profile",
+            f"Enter profile name ({len(selected_files)} files from {len(projects_in_selection)} projects):"
+        )
+        
+        if not ok or not profile_name:
+            return
+        
+        # Group selected files by project
+        files_by_project = {}
+        for file_info in selected_files:
+            project_id = file_info.get('project_id', PROJECT_ID)
+            if project_id not in files_by_project:
+                files_by_project[project_id] = {
+                    'project_id': project_id,
+                    'project_name': file_info.get('project_name', 'Unknown Project'),
+                    'hub_id': file_info.get('hub_id', HUB_ID),
+                    'enabled': True,
+                    'files': []
+                }
+            files_by_project[project_id]['files'].append(file_info)
+        
+        # Build profile data
+        profile_data = {
+            'name': profile_name,
+            'created': datetime.now().isoformat(),
+            'version': 2,  # Multi-project version
+            'projects': list(files_by_project.values())
+        }
+        
+        # Save to file
+        self._save_profile_to_file(profile_name, profile_data)
+        
+        # Log summary
+        project_summary = "\n".join(
+            f"  • {p['project_name']}: {len(p['files'])} files"
+            for p in profile_data['projects']
+        )
+        self._log(f"✅ Multi-project profile created from selection:")
+        self._log(project_summary)
+    
+    def discover_multi_project_files(self):
+        """Discover and display files from multiple projects (does not save profile)"""
         # Show project selector dialog
         dialog = ProjectSelectorDialog(self.token, self)
         dialog.setWindowModality(Qt.ApplicationModal)
@@ -1384,33 +1433,23 @@ class App(QWidget):
             self._log("❌ No projects selected")
             return
         
-        self._log(f"✅ {len(selected_projects)} project(s) selected")
+        self._log(f"✅ {len(selected_projects)} project(s) selected for file discovery")
         
-        # Get profile name
-        profile_name, ok = QInputDialog.getText(
-            self,
-            "Multi-Project Profile",
-            f"Enter profile name ({len(selected_projects)} projects selected):"
-        )
-        
-        if not ok or not profile_name:
-            return
-        
-        # Build multi-project profile
+        # Build multi-project file list (but don't save as profile yet)
         self._log("📥 Fetching files from selected projects...")
-        profile_projects = []
+        all_discovered_files = []
         
-        progress = QProgressDialog("Loading project files...", "Cancel", 0, len(selected_projects), self)
+        progress = QProgressDialog("Discovering project files...", "Cancel", 0, len(selected_projects), self)
         progress.setWindowModality(Qt.WindowModal)
         progress.show()
         
         for idx, project in enumerate(selected_projects):
             progress.setValue(idx)
-            progress.setLabelText(f"Loading: {project['name']}...\n(Project {idx+1} of {len(selected_projects)})")
+            progress.setLabelText(f"Discovering: {project['name']}...\n(Project {idx+1} of {len(selected_projects)})")
             QApplication.processEvents()
             
             if progress.wasCanceled():
-                self._log("⚠️ Profile creation cancelled by user")
+                self._log("⚠️ File discovery cancelled by user")
                 break
             
             self._log(f"📂 Scanning project: {project['name']}")
@@ -1421,13 +1460,13 @@ class App(QWidget):
             try:
                 project_files = self._fetch_project_revit_files(project['id'], project['hub_id'], progress)
                 
-                profile_projects.append({
-                    'project_id': project['id'],
-                    'project_name': project['name'],
-                    'hub_id': project['hub_id'],
-                    'enabled': True,
-                    'files': project_files
-                })
+                # Add project context to each file
+                for file_info in project_files:
+                    file_info['project_name'] = project['name']
+                    file_info['project_id'] = project['id']
+                    file_info['hub_id'] = project['hub_id']
+                
+                all_discovered_files.extend(project_files)
                 
                 self._log(f"  ✓ {project['name']}: {len(project_files)} Revit files")
                 if len(project_files) > 0:
@@ -1441,30 +1480,36 @@ class App(QWidget):
                 self._log(f"  ❌ {project['name']}: Error - {e}")
                 import traceback
                 self._log(f"  Full error: {traceback.format_exc()}")
-                # Continue with empty file list for this project
-                profile_projects.append({
-                    'project_id': project['id'],
-                    'project_name': project['name'],
-                    'hub_id': project['hub_id'],
-                    'enabled': True,
-                    'files': []
-                })
         
         progress.setValue(len(selected_projects))
         progress.close()
         
-        # Build profile data
-        total_files = sum(len(p['files']) for p in profile_projects)
-        profile_data = {
-            'name': profile_name,
-            'created': datetime.now().isoformat(),
-            'version': 2,  # Multi-project version
-            'projects': profile_projects
-        }
+        # Update the main file list with discovered files
+        self.revits = all_discovered_files
+        self.listbox.clear()
         
-        # Save to file
-        self._save_profile_to_file(profile_name, profile_data)
-        self._log(f"✅ Multi-project profile created: {total_files} total files across {len(profile_projects)} projects")
+        # Populate the listbox with discovered files (but don't select them)
+        for file_info in all_discovered_files:
+            project_prefix = f"[{file_info['project_name']}] " if 'project_name' in file_info else ""
+            display_text = f"📐 {project_prefix}{file_info.get('full_path', file_info['name'])}"
+            self.listbox.addItem(display_text)
+        
+        total_files = len(all_discovered_files)
+        unique_projects = len(set(f.get('project_name', '') for f in all_discovered_files))
+        
+        self._log(f"✅ Discovery complete: {total_files} files found across {unique_projects} projects")
+        self._log("💡 Now use Ctrl+Click to select specific files, then 'Save Selection as Profile'")
+        
+        QMessageBox.information(
+            self,
+            "Multi-Project Discovery Complete",
+            f"Found {total_files} Revit files across {unique_projects} projects.\n\n"
+            f"Files are now displayed in the list.\n\n"
+            f"Next steps:\n"
+            f"1. Use Ctrl+Click to select specific files you want\n"
+            f"2. Click 'Save Selection as Profile' to save your selection\n"
+            f"3. Or click 'Extract Profile' to process all visible files"
+        )
     
     def _save_profile_to_file(self, profile_name, profile_data):
         """Save profile data to JSON file"""
