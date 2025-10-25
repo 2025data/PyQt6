@@ -175,8 +175,11 @@
         return;
       }
       
-      // Don't draw if menu is open
-      if (menu.classList.contains('visible')) return;
+      // If menu is open and tapping outside it, close menu
+      if (menu.classList.contains('visible')) {
+        menu.classList.remove('visible');
+        return;
+      }
       
       // Start drawing
       isDrawing = true;
