@@ -53,15 +53,45 @@
       justify-content: space-around;
       align-items: center;
     }
-    #menu button, #menu select {
+    #menu button {
       font-size: 16px;
-      padding: 8px 12px;
-      border: 1px solid #000;
+      padding: 16px 24px;
+      border: 2px solid #000;
       background: #fff;
-      min-width: 60px;
+      min-width: 80px;
+      cursor: pointer;
     }
-    #menu button:active {
+    #menu button:active, #menu button.active {
       background: #ddd;
+      border-color: #333;
+    }
+    .weight-btn, .color-btn, .mirror-btn {
+      min-width: 80px;
+      padding: 16px 24px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+    }
+    .weight-icon {
+      width: 40px;
+      height: 40px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .weight-line {
+      background: #000;
+      width: 100%;
+    }
+    .color-swatch {
+      width: 40px;
+      height: 40px;
+      border: 1px solid #000;
+    }
+    .mirror-icon {
+      width: 40px;
+      height: 40px;
     }
     .status {
       position: fixed;
@@ -87,35 +117,17 @@
   <div id="menu">
     <button id="clearBtn">Clear</button>
     
-    <select id="lineWeight">
-      <option value="1">1px</option>
-      <option value="2">2px</option>
-      <option value="4">4px</option>
-      <option value="7" selected>7px</option>
-      <option value="12">12px</option>
-      <option value="20">20px</option>
-      <option value="33">33px</option>
-      <option value="55">55px</option>
-      <option value="92">92px</option>
-      <option value="153">153px</option>
-      <option value="300">300px</option>
-    </select>
+    <div id="weightBtns" style="display: contents;">
+      <!-- Line weight buttons with visual icons -->
+    </div>
     
-    <select id="color">
-      <option value="#000000" selected>Black</option>
-      <option value="#333333">Dark Gray</option>
-      <option value="#666666">Gray</option>
-      <option value="#999999">Light Gray</option>
-      <option value="#CCCCCC">Lighter</option>
-      <option value="#FFFFFF">White</option>
-    </select>
+    <div id="colorBtns" style="display: contents;">
+      <!-- Color buttons with swatches -->
+    </div>
     
-    <select id="mirror">
-      <option value="none" selected>No Mirror</option>
-      <option value="bilateral">Bilateral</option>
-      <option value="quad">Quad</option>
-      <option value="radial">Radial (8)</option>
-    </select>
+    <div id="mirrorBtns" style="display: contents;">
+      <!-- Mirror buttons with icons -->
+    </div>
     
     <button id="sewBtn">Sew</button>
   </div>
@@ -142,24 +154,86 @@
     let mirrorMode = 'none';
     let counter = parseInt(localStorage.getItem('sewCounter') || '1');
     
-    // Settings - auto-close menu on change
-    document.getElementById('lineWeight').addEventListener('change', (e) => {
-      lineWeight = parseInt(e.target.value);
-      showStatus(`Line: ${lineWeight}px`);
-      menu.classList.remove('visible');
+    // Available options
+    const weights = [1, 2, 4, 7, 12, 20, 33, 55, 92, 153, 300];
+    const colors = ['#000000', '#333333', '#666666', '#999999', '#CCCCCC', '#FFFFFF'];
+    const mirrors = [
+      {mode: 'none', label: '○'},
+      {mode: 'bilateral', label: '◐'},
+      {mode: 'quad', label: '◰'},
+      {mode: 'radial', label: '✱'}
+    ];
+    
+    // Create line weight buttons
+    const weightBtns = document.getElementById('weightBtns');
+    weights.forEach(w => {
+      const btn = document.createElement('button');
+      btn.className = 'weight-btn';
+      if (w === 7) btn.classList.add('active');
+      
+      const icon = document.createElement('div');
+      icon.className = 'weight-icon';
+      
+      const line = document.createElement('div');
+      line.className = 'weight-line';
+      line.style.height = Math.min(w, 40) + 'px';
+      
+      icon.appendChild(line);
+      btn.appendChild(icon);
+      
+      btn.addEventListener('click', () => {
+        lineWeight = w;
+        document.querySelectorAll('.weight-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        showStatus(`Line: ${w}px`);
+        menu.classList.remove('visible');
+      });
+      
+      weightBtns.appendChild(btn);
     });
     
-    document.getElementById('color').addEventListener('change', (e) => {
-      color = e.target.value;
-      showStatus(`Color: ${color}`);
-      menu.classList.remove('visible');
+    // Create color buttons
+    const colorBtns = document.getElementById('colorBtns');
+    colors.forEach(c => {
+      const btn = document.createElement('button');
+      btn.className = 'color-btn';
+      if (c === '#000000') btn.classList.add('active');
+      
+      const swatch = document.createElement('div');
+      swatch.className = 'color-swatch';
+      swatch.style.backgroundColor = c;
+      
+      btn.appendChild(swatch);
+      
+      btn.addEventListener('click', () => {
+        color = c;
+        document.querySelectorAll('.color-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        showStatus(`Color: ${c}`);
+        menu.classList.remove('visible');
+      });
+      
+      colorBtns.appendChild(btn);
     });
     
-    document.getElementById('mirror').addEventListener('change', (e) => {
-      mirrorMode = e.target.value;
-      showStatus(`Mirror: ${mirrorMode}`);
-      redraw();
-      menu.classList.remove('visible');
+    // Create mirror buttons
+    const mirrorBtns = document.getElementById('mirrorBtns');
+    mirrors.forEach(m => {
+      const btn = document.createElement('button');
+      btn.className = 'mirror-btn';
+      btn.textContent = m.label;
+      if (m.mode === 'none') btn.classList.add('active');
+      
+      btn.addEventListener('click', () => {
+        mirrorMode = m.mode;
+        document.querySelectorAll('.mirror-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        showStatus(`Mirror: ${m.mode}`);
+        redraw();
+        menu.classList.remove('visible');
+      });
+      
+      mirrorBtns.appendChild(btn);
     });
     
     // Menu toggle - tap bottom-left corner
