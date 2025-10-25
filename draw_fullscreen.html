@@ -48,34 +48,56 @@
     }
     #menu.visible {
       display: flex;
-      flex-wrap: wrap;
+      flex-direction: row;
       gap: 8px;
       justify-content: space-around;
       align-items: center;
     }
     #menu button {
-      font-size: 16px;
-      padding: 16px 24px;
+      font-size: 14px;
+      padding: 10px 16px;
       border: 2px solid #000;
       background: #fff;
-      min-width: 80px;
       cursor: pointer;
+      white-space: nowrap;
     }
     #menu button:active, #menu button.active {
       background: #ddd;
       border-color: #333;
     }
-    .weight-btn, .color-btn, .mirror-btn {
-      min-width: 80px;
-      padding: 16px 24px;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
+    
+    /* Flyout containers */
+    .flyout-container {
       position: relative;
+      display: inline-block;
     }
+    .flyout {
+      position: absolute;
+      bottom: 100%;
+      left: 50%;
+      transform: translateX(-50%);
+      margin-bottom: 8px;
+      background: rgba(255,255,255,0.98);
+      border: 2px solid #000;
+      padding: 8px;
+      display: none;
+      flex-wrap: wrap;
+      gap: 6px;
+      max-width: 300px;
+      justify-content: center;
+    }
+    .flyout.visible {
+      display: flex;
+    }
+    .flyout button {
+      min-width: 50px;
+      padding: 8px;
+      font-size: 12px;
+    }
+    
     .weight-icon {
       width: 40px;
-      height: 40px;
+      height: 30px;
       display: flex;
       align-items: center;
       justify-content: center;
@@ -86,12 +108,8 @@
     }
     .color-swatch {
       width: 40px;
-      height: 40px;
+      height: 30px;
       border: 1px solid #000;
-    }
-    .mirror-icon {
-      width: 40px;
-      height: 40px;
     }
     .status {
       position: fixed;
@@ -117,16 +135,25 @@
   <div id="menu">
     <button id="clearBtn">Clear</button>
     
-    <div id="weightBtns" style="display: contents;">
-      <!-- Line weight buttons with visual icons -->
+    <div class="flyout-container">
+      <button id="weightToggle">Line</button>
+      <div id="weightFlyout" class="flyout">
+        <!-- Line weight buttons -->
+      </div>
     </div>
     
-    <div id="colorBtns" style="display: contents;">
-      <!-- Color buttons with swatches -->
+    <div class="flyout-container">
+      <button id="colorToggle">Color</button>
+      <div id="colorFlyout" class="flyout">
+        <!-- Color buttons -->
+      </div>
     </div>
     
-    <div id="mirrorBtns" style="display: contents;">
-      <!-- Mirror buttons with icons -->
+    <div class="flyout-container">
+      <button id="mirrorToggle">Mirror</button>
+      <div id="mirrorFlyout" class="flyout">
+        <!-- Mirror buttons -->
+      </div>
     </div>
     
     <button id="sewBtn">Sew</button>
@@ -164,8 +191,16 @@
       {mode: 'radial', label: '✱'}
     ];
     
-    // Create line weight buttons
-    const weightBtns = document.getElementById('weightBtns');
+    // Flyout visibility tracking
+    let activeFlyout = null;
+    
+    function closeFlyouts() {
+      document.querySelectorAll('.flyout').forEach(f => f.classList.remove('visible'));
+      activeFlyout = null;
+    }
+    
+    // Create line weight buttons in flyout
+    const weightFlyout = document.getElementById('weightFlyout');
     weights.forEach(w => {
       const btn = document.createElement('button');
       btn.className = 'weight-btn';
@@ -176,24 +211,39 @@
       
       const line = document.createElement('div');
       line.className = 'weight-line';
-      line.style.height = Math.min(w, 40) + 'px';
+      line.style.height = Math.min(w, 30) + 'px';
       
       icon.appendChild(line);
       btn.appendChild(icon);
       
-      btn.addEventListener('click', () => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
         lineWeight = w;
         document.querySelectorAll('.weight-btn').forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
         showStatus(`Line: ${w}px`);
+        closeFlyouts();
         menu.classList.remove('visible');
       });
       
-      weightBtns.appendChild(btn);
+      weightFlyout.appendChild(btn);
     });
     
-    // Create color buttons
-    const colorBtns = document.getElementById('colorBtns');
+    // Weight toggle button
+    document.getElementById('weightToggle').addEventListener('click', (e) => {
+      e.stopPropagation();
+      const flyout = document.getElementById('weightFlyout');
+      if (activeFlyout === flyout) {
+        closeFlyouts();
+      } else {
+        closeFlyouts();
+        flyout.classList.add('visible');
+        activeFlyout = flyout;
+      }
+    });
+    
+    // Create color buttons in flyout
+    const colorFlyout = document.getElementById('colorFlyout');
     colors.forEach(c => {
       const btn = document.createElement('button');
       btn.className = 'color-btn';
@@ -205,35 +255,66 @@
       
       btn.appendChild(swatch);
       
-      btn.addEventListener('click', () => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
         color = c;
         document.querySelectorAll('.color-btn').forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
         showStatus(`Color: ${c}`);
+        closeFlyouts();
         menu.classList.remove('visible');
       });
       
-      colorBtns.appendChild(btn);
+      colorFlyout.appendChild(btn);
     });
     
-    // Create mirror buttons
-    const mirrorBtns = document.getElementById('mirrorBtns');
+    // Color toggle button
+    document.getElementById('colorToggle').addEventListener('click', (e) => {
+      e.stopPropagation();
+      const flyout = document.getElementById('colorFlyout');
+      if (activeFlyout === flyout) {
+        closeFlyouts();
+      } else {
+        closeFlyouts();
+        flyout.classList.add('visible');
+        activeFlyout = flyout;
+      }
+    });
+    
+    // Create mirror buttons in flyout
+    const mirrorFlyout = document.getElementById('mirrorFlyout');
     mirrors.forEach(m => {
       const btn = document.createElement('button');
       btn.className = 'mirror-btn';
       btn.textContent = m.label;
+      btn.style.fontSize = '20px';
       if (m.mode === 'none') btn.classList.add('active');
       
-      btn.addEventListener('click', () => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
         mirrorMode = m.mode;
         document.querySelectorAll('.mirror-btn').forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
         showStatus(`Mirror: ${m.mode}`);
         redraw();
+        closeFlyouts();
         menu.classList.remove('visible');
       });
       
-      mirrorBtns.appendChild(btn);
+      mirrorFlyout.appendChild(btn);
+    });
+    
+    // Mirror toggle button
+    document.getElementById('mirrorToggle').addEventListener('click', (e) => {
+      e.stopPropagation();
+      const flyout = document.getElementById('mirrorFlyout');
+      if (activeFlyout === flyout) {
+        closeFlyouts();
+      } else {
+        closeFlyouts();
+        flyout.classList.add('visible');
+        activeFlyout = flyout;
+      }
     });
     
     // Menu toggle - tap bottom-left corner
@@ -365,6 +446,7 @@
       currentStroke = null;
       redraw();
       showStatus('Cleared');
+      closeFlyouts();
       menu.classList.remove('visible');
     });
     
@@ -399,6 +481,7 @@
       localStorage.setItem('sewCounter', counter.toString());
       
       showStatus(`Saved: ${filename}`, 3000);
+      closeFlyouts();
       menu.classList.remove('visible');
     });
     
