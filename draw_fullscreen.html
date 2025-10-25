@@ -154,23 +154,13 @@
       background: #000;
       width: 100%;
     }
-    .weight-dots {
+    .weight-label {
       position: absolute;
-      top: 0;
-      left: 2px;
-      right: 2px;
-      height: 20px;
-      pointer-events: none;
-      display: flex;
-      justify-content: center;
-      gap: 8px;
-      flex-wrap: wrap;
-    }
-    .weight-dot {
-      width: 16px;
-      height: 16px;
-      background: #000;
-      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.9);
+      padding: 2px 4px;
+      font-size: 10px;
+      border-radius: 2px;
+      z-index: 2;
     }
     .color-swatch {
       width: 40px;
@@ -377,31 +367,11 @@
       
       icon.appendChild(line);
       
-      // Add dots above the line for weights > 40px
-      if (w > 40) {
-        const dotsContainer = document.createElement('div');
-        dotsContainer.className = 'weight-dots';
-        
-        // Calculate number of dots based on how much larger than 40px
-        // Scale logarithmically for larger weights
-        let numDots;
-        if (w <= 100) {
-          numDots = Math.min(6, Math.ceil((w - 40) / 10));
-        } else if (w <= 200) {
-          numDots = 6 + Math.ceil((w - 100) / 20);
-        } else {
-          numDots = 11 + Math.ceil((w - 200) / 25);
-        }
-        numDots = Math.min(15, numDots); // Cap at 15 dots
-        
-        for (let i = 0; i < numDots; i++) {
-          const dot = document.createElement('div');
-          dot.className = 'weight-dot';
-          dotsContainer.appendChild(dot);
-        }
-        
-        icon.appendChild(dotsContainer);
-      }
+      // Add label showing pixel size
+      const label = document.createElement('div');
+      label.className = 'weight-label';
+      label.textContent = w + 'px';
+      icon.appendChild(label);
       
       btn.appendChild(icon);
       
@@ -577,73 +547,21 @@
       e.preventDefault();
       isDrawing = false;
       
-      // If shape mode and it was just a tap, draw complete shape
-      if (currentStroke.shape && currentStroke.points.length === 1) {
-        const pt = currentStroke.points[0];
-        const segments = getMirroredSegments([pt]);
-        
-        segments.forEach(seg => {
-          seg.forEach(p => {
-            drawShape(currentStroke.shape, p.x, p.y, currentStroke.weight, currentStroke.color);
-          });
-        });
-      } 
-      // If shape mode and dragging, draw shape at end point
-      else if (currentStroke.shape && currentStroke.points.length > 1) {
-        const endPt = currentStroke.points[currentStroke.points.length - 1];
-        const segments = getMirroredSegments([endPt]);
-        
-        segments.forEach(seg => {
-          seg.forEach(p => {
-            drawShape(currentStroke.shape, p.x, p.y, currentStroke.weight, currentStroke.color);
-          });
-        });
-      }
-      // If not shape mode and just a tap, draw a dot
-      else if (!currentStroke.shape && currentStroke.points.length === 1) {
-        const pt = currentStroke.points[0];
-        const segments = getMirroredSegments([pt]);
-        
-        ctx.fillStyle = currentStroke.color;
-        segments.forEach(seg => {
-          seg.forEach(p => {
-            ctx.beginPath();
-            ctx.arc(p.x, p.y, currentStroke.weight / 2, 0, Math.PI * 2);
-            ctx.fill();
-          });
-        });
-      }
-      
+      // Shapes are already drawn during touchmove, just save the stroke
       strokes.push(currentStroke);
       currentStroke = null;
     });
     
     // Draw a single stroke
     function drawStroke(stroke) {
-      // If shape mode, draw half-shape at start and line
-      if (stroke.shape && stroke.points.length > 1) {
+      // If shape mode, stamp shapes along the path
+      if (stroke.shape && stroke.points.length > 0) {
         const segments = getMirroredSegments(stroke.points);
         
-        ctx.strokeStyle = stroke.color;
-        ctx.lineWidth = stroke.weight;
-        ctx.lineCap = 'round';
-        ctx.lineJoin = 'round';
-        
-        // Draw the line path
+        // Stamp shapes along each mirrored segment
         segments.forEach(points => {
-          ctx.beginPath();
-          points.forEach((pt, i) => {
-            if (i === 0) ctx.moveTo(pt.x, pt.y);
-            else ctx.lineTo(pt.x, pt.y);
-          });
-          ctx.stroke();
-        });
-        
-        // Draw half-shape at start point
-        const startSegments = getMirroredSegments([stroke.startPoint]);
-        startSegments.forEach(seg => {
-          seg.forEach(p => {
-            drawHalfShape(stroke.shape, p.x, p.y, stroke.weight, stroke.color);
+          points.forEach(pt => {
+            drawShape(stroke.shape, pt.x, pt.y, stroke.weight, stroke.color);
           });
         });
       } else if (!stroke.shape) {
@@ -778,20 +696,6 @@
       ctx.stroke();
     }
     
-    // Draw half-shape at start point
-    function drawHalfShape(shapeName, x, y, weight, color) {
-      const size = weight * 2;
-      ctx.strokeStyle = color;
-      ctx.lineWidth = weight / 2;
-      
-      ctx.save();
-      ctx.beginPath();
-      ctx.rect(x, y - size * 2, size * 2, size * 4);
-      ctx.clip();
-      drawShape(shapeName, x, y, weight, color);
-      ctx.restore();
-    }
-    
     // Helper functions for complex shapes
     function drawStar(x, y, points, outer, inner) {
       ctx.moveTo(x, y - outer);
@@ -851,39 +755,6 @@
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       strokes.forEach(stroke => {
         drawStroke(stroke);
-        // If stroke has a shape and ended (more than 1 point), draw end shape
-        if (stroke.shape && stroke.points.length > 1) {
-          const endPt = stroke.points[stroke.points.length - 1];
-          const segments = getMirroredSegments([endPt]);
-          segments.forEach(seg => {
-            seg.forEach(p => {
-              drawShape(stroke.shape, p.x, p.y, stroke.weight, stroke.color);
-            });
-          });
-        }
-        // If stroke has a shape and was just a tap (1 point), draw full shape
-        else if (stroke.shape && stroke.points.length === 1) {
-          const pt = stroke.points[0];
-          const segments = getMirroredSegments([pt]);
-          segments.forEach(seg => {
-            seg.forEach(p => {
-              drawShape(stroke.shape, p.x, p.y, stroke.weight, stroke.color);
-            });
-          });
-        }
-        // If no shape and was a tap, draw dot
-        else if (!stroke.shape && stroke.points.length === 1) {
-          const pt = stroke.points[0];
-          const segments = getMirroredSegments([pt]);
-          ctx.fillStyle = stroke.color;
-          segments.forEach(seg => {
-            seg.forEach(p => {
-              ctx.beginPath();
-              ctx.arc(p.x, p.y, stroke.weight / 2, 0, Math.PI * 2);
-              ctx.fill();
-            });
-          });
-        }
       });
       if (currentStroke) drawStroke(currentStroke);
     }
