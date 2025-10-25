@@ -117,14 +117,14 @@
       display: flex;
     }
     .flyout button {
-      min-width: 50px;
-      padding: 8px;
-      font-size: 12px;
+      min-width: 40px;
+      padding: 6px;
+      font-size: 11px;
     }
     
     .weight-icon {
-      width: 40px;
-      height: 30px;
+      width: 30px;
+      height: 25px;
       display: flex;
       align-items: center;
       justify-content: center;
@@ -218,7 +218,7 @@
     let counter = parseInt(localStorage.getItem('sewCounter') || '1');
     
     // Available options
-    const weights = [1, 2, 4, 7, 12, 20, 33, 55, 92, 153, 300];
+    const weights = [1, 2, 3, 4, 5, 7, 9, 12, 15, 19, 24, 30, 38, 48, 60, 75, 85, 92, 97, 100];
     const colors = ['#000000', '#333333', '#666666', '#999999', '#CCCCCC', '#FFFFFF'];
     const mirrors = [
       {mode: 'none', label: '○'},
@@ -307,7 +307,7 @@
       
       const line = document.createElement('div');
       line.className = 'weight-line';
-      line.style.height = Math.min(w, 30) + 'px';
+      line.style.height = Math.min(w, 25) + 'px';
       
       icon.appendChild(line);
       btn.appendChild(icon);
