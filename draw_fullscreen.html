@@ -3,9 +3,11 @@
 <head>
   <meta charset="utf-8">
   <title>Sew Fullscreen</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, minimal-ui">
   <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="mobile-web-app-capable" content="yes">
+  <meta name="theme-color" content="#ffffff">
   <style>
     * { 
       margin: 0; 
@@ -140,21 +142,24 @@
     let mirrorMode = 'none';
     let counter = parseInt(localStorage.getItem('sewCounter') || '1');
     
-    // Settings
+    // Settings - auto-close menu on change
     document.getElementById('lineWeight').addEventListener('change', (e) => {
       lineWeight = parseInt(e.target.value);
       showStatus(`Line: ${lineWeight}px`);
+      menu.classList.remove('visible');
     });
     
     document.getElementById('color').addEventListener('change', (e) => {
       color = e.target.value;
       showStatus(`Color: ${color}`);
+      menu.classList.remove('visible');
     });
     
     document.getElementById('mirror').addEventListener('change', (e) => {
       mirrorMode = e.target.value;
       showStatus(`Mirror: ${mirrorMode}`);
       redraw();
+      menu.classList.remove('visible');
     });
     
     // Menu toggle - tap bottom-left corner
@@ -196,7 +201,22 @@
     
     canvas.addEventListener('touchend', (e) => {
       if (!isDrawing) return;
+      e.preventDefault();
       isDrawing = false;
+      
+      // If it was just a tap (single point), draw a dot
+      if (currentStroke.points.length === 1) {
+        const pt = currentStroke.points[0];
+        const points = getMirroredPoints([pt]);
+        
+        ctx.fillStyle = currentStroke.color;
+        points.forEach(p => {
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, currentStroke.weight / 2, 0, Math.PI * 2);
+          ctx.fill();
+        });
+      }
+      
       strokes.push(currentStroke);
       currentStroke = null;
     });
@@ -268,9 +288,10 @@
       currentStroke = null;
       redraw();
       showStatus('Cleared');
+      menu.classList.remove('visible');
     });
     
-    // Close menu
+    // Close menu (kept for manual close if needed)
     document.getElementById('closeMenu').addEventListener('click', () => {
       menu.classList.remove('visible');
     });
@@ -335,6 +356,20 @@
     } else if (document.documentElement.webkitRequestFullscreen) {
       document.documentElement.webkitRequestFullscreen().catch(() => {});
     }
+    
+    // Force scroll to hide URL bar on Kindle/mobile browsers
+    window.addEventListener('load', () => {
+      setTimeout(() => {
+        window.scrollTo(0, 1);
+      }, 100);
+    });
+    
+    // Hide address bar on orientation change
+    window.addEventListener('orientationchange', () => {
+      setTimeout(() => {
+        window.scrollTo(0, 1);
+      }, 100);
+    });
   </script>
 </body>
 </html>
