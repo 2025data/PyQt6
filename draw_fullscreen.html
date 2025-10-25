@@ -156,14 +156,16 @@
     }
     .weight-dots {
       position: absolute;
-      top: 2px;
+      top: 0;
       left: 2px;
       right: 2px;
-      bottom: 2px;
+      height: 10px;
       pointer-events: none;
+      display: flex;
+      justify-content: center;
+      gap: 3px;
     }
     .weight-dot {
-      position: absolute;
       width: 4px;
       height: 4px;
       background: #000;
@@ -254,7 +256,15 @@
     let counter = parseInt(localStorage.getItem('sewCounter') || '1');
     
     // Available options
-    const weights = [1, 2, 3, 4, 5, 7, 9, 12, 15, 19, 24, 30, 38, 48, 60, 75, 85, 92, 97, 100];
+    const weights = [
+      1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
+      11, 12, 13, 14, 15, 16, 17, 18, 19, 20,
+      21, 22, 23, 24, 25, 26, 27, 28, 29, 30,
+      31, 32, 33, 34, 35, 36, 37, 38, 39, 40,
+      41, 42, 43, 44, 45, 46, 47, 48, 49, 50,
+      51, 52, 53, 54, 55, 56, 57, 58, 59, 60,
+      61, 62, 63, 64, 65, 66, 67, 68, 69, 70
+    ];
     const colors = ['#000000', '#333333', '#666666', '#999999', '#CCCCCC', '#FFFFFF'];
     const mirrors = [
       {mode: 'none', label: '○'},
@@ -343,28 +353,22 @@
       
       const line = document.createElement('div');
       line.className = 'weight-line';
-      line.style.height = Math.min(w, 25) + 'px';
+      line.style.height = Math.min(w, 40) + 'px';
       
       icon.appendChild(line);
       
-      // Add corner dots for weights > 20px
-      if (w > 20) {
+      // Add dots above the line for weights > 40px
+      if (w > 40) {
         const dotsContainer = document.createElement('div');
         dotsContainer.className = 'weight-dots';
         
-        // Calculate number of dots (1-4 based on size)
-        const numDots = Math.min(4, Math.ceil((w - 20) / 20));
-        const positions = [
-          {top: '0', left: '0'},
-          {top: '0', right: '0'},
-          {bottom: '0', left: '0'},
-          {bottom: '0', right: '0'}
-        ];
+        // Calculate number of dots based on how much larger than 40px
+        // 1 dot per 10px over 40, max 6 dots (for 40-100px range)
+        const numDots = Math.min(6, Math.ceil((w - 40) / 10));
         
         for (let i = 0; i < numDots; i++) {
           const dot = document.createElement('div');
           dot.className = 'weight-dot';
-          Object.assign(dot.style, positions[i]);
           dotsContainer.appendChild(dot);
         }
         
