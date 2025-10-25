@@ -128,8 +128,8 @@
       transform: none;
       margin: 0;
       display: none;
-      grid-template-columns: repeat(auto-fit, minmax(60px, 1fr));
-      grid-auto-rows: 60px;
+      grid-template-columns: repeat(7, 1fr);
+      grid-template-rows: repeat(7, 1fr);
       overflow-y: auto;
     }
     #weightFlyout.visible {
@@ -159,16 +159,16 @@
       top: 0;
       left: 2px;
       right: 2px;
-      height: 10px;
+      height: 20px;
       pointer-events: none;
       display: flex;
       justify-content: center;
-      gap: 2px;
+      gap: 8px;
       flex-wrap: wrap;
     }
     .weight-dot {
-      width: 4px;
-      height: 4px;
+      width: 16px;
+      height: 16px;
       background: #000;
       border-radius: 50%;
     }
@@ -251,22 +251,20 @@
     let isDrawing = false;
     let strokes = [];
     let currentStroke = null;
-    let lineWeight = 14;
+    let lineWeight = 13;
     let color = '#000000';
     let mirrorMode = 'none';
     let counter = parseInt(localStorage.getItem('sewCounter') || '1');
     
-    // Available options - 70 weights from 1-300px, clustered around 14px
+    // Available options - 49 weights (7x7 grid), Fibonacci to 50px then exponential to 300px
     const weights = [
-      1, 2, 3, 4, 5, 6, 7, 8, 9, 10,        // 1-10 (10 weights)
-      11, 12, 13, 14, 15, 16, 17, 18, 19, 20, // 11-20 (10 weights) - dense around 14
-      21, 22, 23, 24, 25, 26, 28, 30,       // 21-30 (8 weights)
-      32, 34, 36, 38, 40, 42, 44, 46, 48, 50, // 32-50 (10 weights)
-      52, 55, 58, 61, 64, 67, 70, 73, 76, 80, // 52-80 (10 weights)
-      84, 88, 92, 96, 100,                  // 84-100 (5 weights)
-      105, 110, 115, 120, 125, 130,         // 105-130 (6 weights)
-      140, 150, 160, 170, 180,              // 140-180 (5 weights)
-      190, 200, 220, 240, 260, 280, 300     // 190-300 (7 weights)
+      1, 1, 2, 3, 5, 8, 13,              // Row 1: Fibonacci 1-13
+      21, 34, 55, 65, 75, 85, 95,        // Row 2: Fibonacci 21, 34, then +10 increments
+      105, 115, 125, 135, 145, 155, 165, // Row 3: +10 increments
+      175, 185, 195, 205, 215, 225, 235, // Row 4: +10 increments
+      245, 255, 265, 275, 285, 295, 300, // Row 5: +10 to 300
+      1, 2, 3, 5, 8, 13, 21,             // Row 6: Fibonacci repeat (common sizes)
+      34, 55, 89, 144, 180, 220, 260     // Row 7: Fibonacci + larger jumps
     ];
     const colors = ['#000000', '#333333', '#666666', '#999999', '#CCCCCC', '#FFFFFF'];
     const mirrors = [
@@ -349,7 +347,7 @@
     weights.forEach(w => {
       const btn = document.createElement('button');
       btn.className = 'weight-btn';
-      if (w === 14) btn.classList.add('active');
+      if (w === 13) btn.classList.add('active');
       
       const icon = document.createElement('div');
       icon.className = 'weight-icon';
