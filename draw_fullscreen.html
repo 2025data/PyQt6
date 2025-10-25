@@ -116,6 +116,26 @@
     .flyout.visible {
       display: flex;
     }
+    
+    /* Full-screen grid for line weights */
+    #weightFlyout {
+      position: fixed;
+      top: 10px;
+      left: 10px;
+      right: 10px;
+      bottom: 80px;
+      max-width: 100%;
+      transform: none;
+      margin: 0;
+      display: none;
+      grid-template-columns: repeat(auto-fit, minmax(60px, 1fr));
+      grid-auto-rows: 60px;
+      overflow-y: auto;
+    }
+    #weightFlyout.visible {
+      display: grid;
+    }
+    
     .flyout button {
       min-width: 40px;
       padding: 6px;
@@ -123,15 +143,31 @@
     }
     
     .weight-icon {
-      width: 30px;
-      height: 25px;
+      width: 50px;
+      height: 50px;
       display: flex;
       align-items: center;
       justify-content: center;
+      position: relative;
     }
     .weight-line {
       background: #000;
       width: 100%;
+    }
+    .weight-dots {
+      position: absolute;
+      top: 2px;
+      left: 2px;
+      right: 2px;
+      bottom: 2px;
+      pointer-events: none;
+    }
+    .weight-dot {
+      position: absolute;
+      width: 4px;
+      height: 4px;
+      background: #000;
+      border-radius: 50%;
     }
     .color-swatch {
       width: 40px;
@@ -310,6 +346,31 @@
       line.style.height = Math.min(w, 25) + 'px';
       
       icon.appendChild(line);
+      
+      // Add corner dots for weights > 20px
+      if (w > 20) {
+        const dotsContainer = document.createElement('div');
+        dotsContainer.className = 'weight-dots';
+        
+        // Calculate number of dots (1-4 based on size)
+        const numDots = Math.min(4, Math.ceil((w - 20) / 20));
+        const positions = [
+          {top: '0', left: '0'},
+          {top: '0', right: '0'},
+          {bottom: '0', left: '0'},
+          {bottom: '0', right: '0'}
+        ];
+        
+        for (let i = 0; i < numDots; i++) {
+          const dot = document.createElement('div');
+          dot.className = 'weight-dot';
+          Object.assign(dot.style, positions[i]);
+          dotsContainer.appendChild(dot);
+        }
+        
+        icon.appendChild(dotsContainer);
+      }
+      
       btn.appendChild(icon);
       
       btn.addEventListener('click', (e) => {
