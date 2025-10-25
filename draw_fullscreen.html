@@ -163,7 +163,8 @@
       pointer-events: none;
       display: flex;
       justify-content: center;
-      gap: 3px;
+      gap: 2px;
+      flex-wrap: wrap;
     }
     .weight-dot {
       width: 4px;
@@ -250,20 +251,22 @@
     let isDrawing = false;
     let strokes = [];
     let currentStroke = null;
-    let lineWeight = 7;
+    let lineWeight = 14;
     let color = '#000000';
     let mirrorMode = 'none';
     let counter = parseInt(localStorage.getItem('sewCounter') || '1');
     
-    // Available options
+    // Available options - 70 weights from 1-300px, clustered around 14px
     const weights = [
-      1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
-      11, 12, 13, 14, 15, 16, 17, 18, 19, 20,
-      21, 22, 23, 24, 25, 26, 27, 28, 29, 30,
-      31, 32, 33, 34, 35, 36, 37, 38, 39, 40,
-      41, 42, 43, 44, 45, 46, 47, 48, 49, 50,
-      51, 52, 53, 54, 55, 56, 57, 58, 59, 60,
-      61, 62, 63, 64, 65, 66, 67, 68, 69, 70
+      1, 2, 3, 4, 5, 6, 7, 8, 9, 10,        // 1-10 (10 weights)
+      11, 12, 13, 14, 15, 16, 17, 18, 19, 20, // 11-20 (10 weights) - dense around 14
+      21, 22, 23, 24, 25, 26, 28, 30,       // 21-30 (8 weights)
+      32, 34, 36, 38, 40, 42, 44, 46, 48, 50, // 32-50 (10 weights)
+      52, 55, 58, 61, 64, 67, 70, 73, 76, 80, // 52-80 (10 weights)
+      84, 88, 92, 96, 100,                  // 84-100 (5 weights)
+      105, 110, 115, 120, 125, 130,         // 105-130 (6 weights)
+      140, 150, 160, 170, 180,              // 140-180 (5 weights)
+      190, 200, 220, 240, 260, 280, 300     // 190-300 (7 weights)
     ];
     const colors = ['#000000', '#333333', '#666666', '#999999', '#CCCCCC', '#FFFFFF'];
     const mirrors = [
@@ -346,7 +349,7 @@
     weights.forEach(w => {
       const btn = document.createElement('button');
       btn.className = 'weight-btn';
-      if (w === 7) btn.classList.add('active');
+      if (w === 14) btn.classList.add('active');
       
       const icon = document.createElement('div');
       icon.className = 'weight-icon';
@@ -363,8 +366,16 @@
         dotsContainer.className = 'weight-dots';
         
         // Calculate number of dots based on how much larger than 40px
-        // 1 dot per 10px over 40, max 6 dots (for 40-100px range)
-        const numDots = Math.min(6, Math.ceil((w - 40) / 10));
+        // Scale logarithmically for larger weights
+        let numDots;
+        if (w <= 100) {
+          numDots = Math.min(6, Math.ceil((w - 40) / 10));
+        } else if (w <= 200) {
+          numDots = 6 + Math.ceil((w - 100) / 20);
+        } else {
+          numDots = 11 + Math.ceil((w - 200) / 25);
+        }
+        numDots = Math.min(15, numDots); // Cap at 15 dots
         
         for (let i = 0; i < numDots; i++) {
           const dot = document.createElement('div');
