@@ -60,10 +60,37 @@
       background: #fff;
       cursor: pointer;
       white-space: nowrap;
+      position: relative;
+      overflow: hidden;
     }
     #menu button:active, #menu button.active {
       background: #ddd;
       border-color: #333;
+    }
+    
+    /* Visual indicators on toggle buttons */
+    .btn-indicator {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      pointer-events: none;
+      z-index: 1;
+    }
+    .btn-text {
+      position: relative;
+      z-index: 2;
+      background: #fff;
+      padding: 0 4px;
+      display: inline-block;
+    }
+    #weightToggle .btn-text,
+    #colorToggle .btn-text,
+    #mirrorToggle .btn-text {
+      background: rgba(255, 255, 255, 0.9);
+      padding: 2px 6px;
+      border-radius: 2px;
     }
     
     /* Flyout containers */
@@ -136,21 +163,30 @@
     <button id="clearBtn">Clear</button>
     
     <div class="flyout-container">
-      <button id="weightToggle">Line</button>
+      <button id="weightToggle">
+        <canvas class="btn-indicator" id="weightIndicator" width="80" height="40"></canvas>
+        <span class="btn-text">Line</span>
+      </button>
       <div id="weightFlyout" class="flyout">
         <!-- Line weight buttons -->
       </div>
     </div>
     
     <div class="flyout-container">
-      <button id="colorToggle">Color</button>
+      <button id="colorToggle">
+        <div class="btn-indicator" id="colorIndicator"></div>
+        <span class="btn-text">Color</span>
+      </button>
       <div id="colorFlyout" class="flyout">
         <!-- Color buttons -->
       </div>
     </div>
     
     <div class="flyout-container">
-      <button id="mirrorToggle">Mirror</button>
+      <button id="mirrorToggle">
+        <canvas class="btn-indicator" id="mirrorIndicator" width="80" height="40"></canvas>
+        <span class="btn-text">Mirror</span>
+      </button>
       <div id="mirrorFlyout" class="flyout">
         <!-- Mirror buttons -->
       </div>
@@ -199,6 +235,66 @@
       activeFlyout = null;
     }
     
+    // Update visual indicators
+    function updateWeightIndicator() {
+      const canvas = document.getElementById('weightIndicator');
+      const ctx = canvas.getContext('2d');
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      
+      const thickness = Math.min(lineWeight, 20);
+      ctx.fillStyle = '#000';
+      ctx.fillRect(0, (canvas.height - thickness) / 2, canvas.width, thickness);
+    }
+    
+    function updateColorIndicator() {
+      const indicator = document.getElementById('colorIndicator');
+      indicator.style.backgroundColor = color;
+    }
+    
+    function updateMirrorIndicator() {
+      const canvas = document.getElementById('mirrorIndicator');
+      const ctx = canvas.getContext('2d');
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      
+      const cx = canvas.width / 2;
+      const cy = canvas.height / 2;
+      ctx.strokeStyle = '#000';
+      ctx.lineWidth = 2;
+      
+      if (mirrorMode === 'bilateral') {
+        // Vertical line
+        ctx.beginPath();
+        ctx.moveTo(cx, 0);
+        ctx.lineTo(cx, canvas.height);
+        ctx.stroke();
+      } else if (mirrorMode === 'quad') {
+        // Vertical and horizontal lines
+        ctx.beginPath();
+        ctx.moveTo(cx, 0);
+        ctx.lineTo(cx, canvas.height);
+        ctx.moveTo(0, cy);
+        ctx.lineTo(canvas.width, cy);
+        ctx.stroke();
+      } else if (mirrorMode === 'radial') {
+        // 8 lines radiating from center
+        for (let angle = 0; angle < 360; angle += 45) {
+          const rad = angle * Math.PI / 180;
+          const x2 = cx + Math.cos(rad) * cx;
+          const y2 = cy + Math.sin(rad) * cy;
+          ctx.beginPath();
+          ctx.moveTo(cx, cy);
+          ctx.lineTo(x2, y2);
+          ctx.stroke();
+        }
+      }
+      // 'none' shows no lines
+    }
+    
+    // Initialize indicators
+    updateWeightIndicator();
+    updateColorIndicator();
+    updateMirrorIndicator();
+    
     // Create line weight buttons in flyout
     const weightFlyout = document.getElementById('weightFlyout');
     weights.forEach(w => {
@@ -221,6 +317,7 @@
         lineWeight = w;
         document.querySelectorAll('.weight-btn').forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
+        updateWeightIndicator();
         showStatus(`Line: ${w}px`);
         closeFlyouts();
         menu.classList.remove('visible');
@@ -260,6 +357,7 @@
         color = c;
         document.querySelectorAll('.color-btn').forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
+        updateColorIndicator();
         showStatus(`Color: ${c}`);
         closeFlyouts();
         menu.classList.remove('visible');
@@ -295,6 +393,7 @@
         mirrorMode = m.mode;
         document.querySelectorAll('.mirror-btn').forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
+        updateMirrorIndicator();
         showStatus(`Mirror: ${m.mode}`);
         redraw();
         closeFlyouts();
