@@ -464,13 +464,15 @@
       // If it was just a tap (single point), draw a dot
       if (currentStroke.points.length === 1) {
         const pt = currentStroke.points[0];
-        const points = getMirroredPoints([pt]);
+        const segments = getMirroredSegments([pt]);
         
         ctx.fillStyle = currentStroke.color;
-        points.forEach(p => {
-          ctx.beginPath();
-          ctx.arc(p.x, p.y, currentStroke.weight / 2, 0, Math.PI * 2);
-          ctx.fill();
+        segments.forEach(seg => {
+          seg.forEach(p => {
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, currentStroke.weight / 2, 0, Math.PI * 2);
+            ctx.fill();
+          });
         });
       }
       
@@ -480,56 +482,65 @@
     
     // Draw a single stroke
     function drawStroke(stroke) {
-      const points = getMirroredPoints(stroke.points);
+      const segments = getMirroredSegments(stroke.points);
       
       ctx.strokeStyle = stroke.color;
       ctx.lineWidth = stroke.weight;
       ctx.lineCap = 'round';
       ctx.lineJoin = 'round';
       
-      ctx.beginPath();
-      points.forEach((pt, i) => {
-        if (i === 0) ctx.moveTo(pt.x, pt.y);
-        else ctx.lineTo(pt.x, pt.y);
+      // Draw each segment separately
+      segments.forEach(points => {
+        ctx.beginPath();
+        points.forEach((pt, i) => {
+          if (i === 0) ctx.moveTo(pt.x, pt.y);
+          else ctx.lineTo(pt.x, pt.y);
+        });
+        ctx.stroke();
       });
-      ctx.stroke();
     }
     
-    // Get mirrored points based on mode
-    function getMirroredPoints(points) {
-      if (mirrorMode === 'none') return points;
+    // Get mirrored segments based on mode
+    function getMirroredSegments(points) {
+      if (mirrorMode === 'none') return [points];
       
       const cx = canvas.width / 2;
       const cy = canvas.height / 2;
-      const result = [...points];
+      const segments = [points]; // Original stroke
       
       if (mirrorMode === 'bilateral') {
-        points.forEach(p => {
-          result.push({x: 2*cx - p.x, y: p.y});
-        });
+        // Mirror across vertical center
+        segments.push(points.map(p => ({x: 2*cx - p.x, y: p.y})));
       } else if (mirrorMode === 'quad') {
-        points.forEach(p => {
-          result.push({x: 2*cx - p.x, y: p.y});
-          result.push({x: p.x, y: 2*cy - p.y});
-          result.push({x: 2*cx - p.x, y: 2*cy - p.y});
-        });
+        // Mirror across vertical, horizontal, and both
+        segments.push(points.map(p => ({x: 2*cx - p.x, y: p.y})));
+        segments.push(points.map(p => ({x: p.x, y: 2*cy - p.y})));
+        segments.push(points.map(p => ({x: 2*cx - p.x, y: 2*cy - p.y})));
       } else if (mirrorMode === 'radial') {
-        points.forEach(p => {
-          const dx = p.x - cx;
-          const dy = p.y - cy;
-          for (let angle = 45; angle < 360; angle += 45) {
-            const rad = angle * Math.PI / 180;
-            const cos_a = Math.cos(rad);
-            const sin_a = Math.sin(rad);
-            result.push({
+        // Rotate around center at 45-degree intervals
+        for (let angle = 45; angle < 360; angle += 45) {
+          const rad = angle * Math.PI / 180;
+          const cos_a = Math.cos(rad);
+          const sin_a = Math.sin(rad);
+          segments.push(points.map(p => {
+            const dx = p.x - cx;
+            const dy = p.y - cy;
+            return {
               x: cx + dx * cos_a - dy * sin_a,
               y: cy + dx * sin_a + dy * cos_a
-            });
-          }
-        });
+            };
+          }));
+        }
       }
       
-      return result;
+      return segments;
+    }
+    
+    // Get mirrored points (for saving) based on mode
+    function getMirroredPoints(points) {
+      const segments = getMirroredSegments(points);
+      // Flatten all segments into one array for export
+      return segments.flat();
     }
     
     // Redraw everything
