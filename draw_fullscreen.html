@@ -254,18 +254,37 @@
     let lineWeight = 13;
     let color = '#000000';
     let mirrorMode = 'none';
+    let currentShape = null; // null for line drawing, or shape name
     let counter = parseInt(localStorage.getItem('sewCounter') || '1');
     
-    // Available options - 49 weights (7x7 grid), Fibonacci to 50px then exponential to 300px
+    // Available options - 49 items (7x7 grid)
+    // Rows 1-5: Line weights (35 weights)
     const weights = [
       1, 1, 2, 3, 5, 8, 13,              // Row 1: Fibonacci 1-13
       21, 34, 55, 65, 75, 85, 95,        // Row 2: Fibonacci 21, 34, then +10 increments
       105, 115, 125, 135, 145, 155, 165, // Row 3: +10 increments
       175, 185, 195, 205, 215, 225, 235, // Row 4: +10 increments
-      245, 255, 265, 275, 285, 295, 300, // Row 5: +10 to 300
-      1, 2, 3, 5, 8, 13, 21,             // Row 6: Fibonacci repeat (common sizes)
-      34, 55, 89, 144, 180, 220, 260     // Row 7: Fibonacci + larger jumps
+      245, 255, 265, 275, 285, 295, 300  // Row 5: +10 to 300
     ];
+    
+    // Rows 6-7: Shapes (14 shapes)
+    const shapes = [
+      {name: 'circle', label: '○'},
+      {name: 'square', label: '□'},
+      {name: 'triangle', label: '△'},
+      {name: 'star', label: '★'},
+      {name: 'heart', label: '♥'},
+      {name: 'diamond', label: '◇'},
+      {name: 'hexagon', label: '⬡'},
+      {name: 'pentagon', label: '⬠'},
+      {name: 'cross', label: '✚'},
+      {name: 'x', label: '✕'},
+      {name: 'arrowUp', label: '▲'},
+      {name: 'arrowRight', label: '▶'},
+      {name: 'spiral', label: '◎'},
+      {name: 'wave', label: '〰'}
+    ];
+    
     const colors = ['#000000', '#333333', '#666666', '#999999', '#CCCCCC', '#FFFFFF'];
     const mirrors = [
       {mode: 'none', label: '○'},
@@ -400,6 +419,27 @@
       weightFlyout.appendChild(btn);
     });
     
+    // Create shape buttons in flyout (rows 6-7)
+    shapes.forEach(shape => {
+      const btn = document.createElement('button');
+      btn.className = 'shape-btn';
+      btn.textContent = shape.label;
+      btn.style.fontSize = '24px';
+      if (shape.name === 'circle' && currentShape === null) btn.classList.add('active');
+      
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        currentShape = shape.name;
+        document.querySelectorAll('.shape-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        showStatus(`Shape: ${shape.name}`);
+        closeFlyouts();
+        menu.classList.remove('visible');
+      });
+      
+      weightFlyout.appendChild(btn);
+    });
+    
     // Weight toggle button
     document.getElementById('weightToggle').addEventListener('click', (e) => {
       e.stopPropagation();
@@ -514,7 +554,9 @@
       currentStroke = {
         points: [{x, y}],
         weight: lineWeight,
-        color: color
+        color: color,
+        shape: currentShape,
+        startPoint: {x, y}
       };
     }, {passive: false});
     
@@ -535,8 +577,30 @@
       e.preventDefault();
       isDrawing = false;
       
-      // If it was just a tap (single point), draw a dot
-      if (currentStroke.points.length === 1) {
+      // If shape mode and it was just a tap, draw complete shape
+      if (currentStroke.shape && currentStroke.points.length === 1) {
+        const pt = currentStroke.points[0];
+        const segments = getMirroredSegments([pt]);
+        
+        segments.forEach(seg => {
+          seg.forEach(p => {
+            drawShape(currentStroke.shape, p.x, p.y, currentStroke.weight, currentStroke.color);
+          });
+        });
+      } 
+      // If shape mode and dragging, draw shape at end point
+      else if (currentStroke.shape && currentStroke.points.length > 1) {
+        const endPt = currentStroke.points[currentStroke.points.length - 1];
+        const segments = getMirroredSegments([endPt]);
+        
+        segments.forEach(seg => {
+          seg.forEach(p => {
+            drawShape(currentStroke.shape, p.x, p.y, currentStroke.weight, currentStroke.color);
+          });
+        });
+      }
+      // If not shape mode and just a tap, draw a dot
+      else if (!currentStroke.shape && currentStroke.points.length === 1) {
         const pt = currentStroke.points[0];
         const segments = getMirroredSegments([pt]);
         
@@ -556,22 +620,51 @@
     
     // Draw a single stroke
     function drawStroke(stroke) {
-      const segments = getMirroredSegments(stroke.points);
-      
-      ctx.strokeStyle = stroke.color;
-      ctx.lineWidth = stroke.weight;
-      ctx.lineCap = 'round';
-      ctx.lineJoin = 'round';
-      
-      // Draw each segment separately
-      segments.forEach(points => {
-        ctx.beginPath();
-        points.forEach((pt, i) => {
-          if (i === 0) ctx.moveTo(pt.x, pt.y);
-          else ctx.lineTo(pt.x, pt.y);
+      // If shape mode, draw half-shape at start and line
+      if (stroke.shape && stroke.points.length > 1) {
+        const segments = getMirroredSegments(stroke.points);
+        
+        ctx.strokeStyle = stroke.color;
+        ctx.lineWidth = stroke.weight;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        
+        // Draw the line path
+        segments.forEach(points => {
+          ctx.beginPath();
+          points.forEach((pt, i) => {
+            if (i === 0) ctx.moveTo(pt.x, pt.y);
+            else ctx.lineTo(pt.x, pt.y);
+          });
+          ctx.stroke();
         });
-        ctx.stroke();
-      });
+        
+        // Draw half-shape at start point
+        const startSegments = getMirroredSegments([stroke.startPoint]);
+        startSegments.forEach(seg => {
+          seg.forEach(p => {
+            drawHalfShape(stroke.shape, p.x, p.y, stroke.weight, stroke.color);
+          });
+        });
+      } else if (!stroke.shape) {
+        // Normal line drawing
+        const segments = getMirroredSegments(stroke.points);
+        
+        ctx.strokeStyle = stroke.color;
+        ctx.lineWidth = stroke.weight;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        
+        // Draw each segment separately
+        segments.forEach(points => {
+          ctx.beginPath();
+          points.forEach((pt, i) => {
+            if (i === 0) ctx.moveTo(pt.x, pt.y);
+            else ctx.lineTo(pt.x, pt.y);
+          });
+          ctx.stroke();
+        });
+      }
     }
     
     // Get mirrored segments based on mode
@@ -610,6 +703,142 @@
       return segments;
     }
     
+    // Draw complete shape at point
+    function drawShape(shapeName, x, y, weight, color) {
+      const size = weight * 2;
+      ctx.strokeStyle = color;
+      ctx.fillStyle = color;
+      ctx.lineWidth = weight / 2;
+      
+      ctx.beginPath();
+      switch(shapeName) {
+        case 'circle':
+          ctx.arc(x, y, size, 0, Math.PI * 2);
+          break;
+        case 'square':
+          ctx.rect(x - size, y - size, size * 2, size * 2);
+          break;
+        case 'triangle':
+          ctx.moveTo(x, y - size);
+          ctx.lineTo(x + size, y + size);
+          ctx.lineTo(x - size, y + size);
+          ctx.closePath();
+          break;
+        case 'star':
+          drawStar(x, y, 5, size, size / 2);
+          break;
+        case 'heart':
+          drawHeart(x, y, size);
+          break;
+        case 'diamond':
+          ctx.moveTo(x, y - size);
+          ctx.lineTo(x + size, y);
+          ctx.lineTo(x, y + size);
+          ctx.lineTo(x - size, y);
+          ctx.closePath();
+          break;
+        case 'hexagon':
+          drawPolygon(x, y, 6, size);
+          break;
+        case 'pentagon':
+          drawPolygon(x, y, 5, size);
+          break;
+        case 'cross':
+          const w = size / 3;
+          ctx.rect(x - w, y - size, w * 2, size * 2);
+          ctx.rect(x - size, y - w, size * 2, w * 2);
+          break;
+        case 'x':
+          ctx.moveTo(x - size, y - size);
+          ctx.lineTo(x + size, y + size);
+          ctx.moveTo(x + size, y - size);
+          ctx.lineTo(x - size, y + size);
+          break;
+        case 'arrowUp':
+          ctx.moveTo(x, y - size);
+          ctx.lineTo(x + size, y + size / 2);
+          ctx.lineTo(x, y);
+          ctx.lineTo(x - size, y + size / 2);
+          ctx.closePath();
+          break;
+        case 'arrowRight':
+          ctx.moveTo(x + size, y);
+          ctx.lineTo(x - size / 2, y + size);
+          ctx.lineTo(x, y);
+          ctx.lineTo(x - size / 2, y - size);
+          ctx.closePath();
+          break;
+        case 'spiral':
+          drawSpiral(x, y, size);
+          break;
+        case 'wave':
+          drawWave(x, y, size);
+          break;
+      }
+      ctx.stroke();
+    }
+    
+    // Draw half-shape at start point
+    function drawHalfShape(shapeName, x, y, weight, color) {
+      const size = weight * 2;
+      ctx.strokeStyle = color;
+      ctx.lineWidth = weight / 2;
+      
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(x, y - size * 2, size * 2, size * 4);
+      ctx.clip();
+      drawShape(shapeName, x, y, weight, color);
+      ctx.restore();
+    }
+    
+    // Helper functions for complex shapes
+    function drawStar(x, y, points, outer, inner) {
+      ctx.moveTo(x, y - outer);
+      for (let i = 0; i < points * 2; i++) {
+        const radius = i % 2 === 0 ? outer : inner;
+        const angle = (Math.PI * i) / points - Math.PI / 2;
+        ctx.lineTo(x + radius * Math.cos(angle), y + radius * Math.sin(angle));
+      }
+      ctx.closePath();
+    }
+    
+    function drawHeart(x, y, size) {
+      ctx.moveTo(x, y + size / 4);
+      ctx.bezierCurveTo(x, y - size / 4, x - size, y - size / 4, x - size, y + size / 4);
+      ctx.bezierCurveTo(x - size, y + size, x, y + size, x, y + size * 1.5);
+      ctx.bezierCurveTo(x, y + size, x + size, y + size, x + size, y + size / 4);
+      ctx.bezierCurveTo(x + size, y - size / 4, x, y - size / 4, x, y + size / 4);
+    }
+    
+    function drawPolygon(x, y, sides, size) {
+      ctx.moveTo(x + size * Math.cos(0), y + size * Math.sin(0));
+      for (let i = 1; i <= sides; i++) {
+        ctx.lineTo(x + size * Math.cos(i * 2 * Math.PI / sides), y + size * Math.sin(i * 2 * Math.PI / sides));
+      }
+      ctx.closePath();
+    }
+    
+    function drawSpiral(x, y, size) {
+      let angle = 0;
+      let radius = 0;
+      ctx.moveTo(x, y);
+      while (radius < size) {
+        angle += 0.1;
+        radius += 0.05 * size;
+        ctx.lineTo(x + radius * Math.cos(angle), y + radius * Math.sin(angle));
+      }
+    }
+    
+    function drawWave(x, y, size) {
+      ctx.moveTo(x - size, y);
+      for (let i = 0; i <= 20; i++) {
+        const xPos = x - size + (i / 20) * size * 2;
+        const yPos = y + Math.sin(i / 3) * size / 2;
+        ctx.lineTo(xPos, yPos);
+      }
+    }
+    
     // Get mirrored points (for saving) based on mode
     function getMirroredPoints(points) {
       const segments = getMirroredSegments(points);
@@ -620,7 +849,42 @@
     // Redraw everything
     function redraw() {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
-      strokes.forEach(stroke => drawStroke(stroke));
+      strokes.forEach(stroke => {
+        drawStroke(stroke);
+        // If stroke has a shape and ended (more than 1 point), draw end shape
+        if (stroke.shape && stroke.points.length > 1) {
+          const endPt = stroke.points[stroke.points.length - 1];
+          const segments = getMirroredSegments([endPt]);
+          segments.forEach(seg => {
+            seg.forEach(p => {
+              drawShape(stroke.shape, p.x, p.y, stroke.weight, stroke.color);
+            });
+          });
+        }
+        // If stroke has a shape and was just a tap (1 point), draw full shape
+        else if (stroke.shape && stroke.points.length === 1) {
+          const pt = stroke.points[0];
+          const segments = getMirroredSegments([pt]);
+          segments.forEach(seg => {
+            seg.forEach(p => {
+              drawShape(stroke.shape, p.x, p.y, stroke.weight, stroke.color);
+            });
+          });
+        }
+        // If no shape and was a tap, draw dot
+        else if (!stroke.shape && stroke.points.length === 1) {
+          const pt = stroke.points[0];
+          const segments = getMirroredSegments([pt]);
+          ctx.fillStyle = stroke.color;
+          segments.forEach(seg => {
+            seg.forEach(p => {
+              ctx.beginPath();
+              ctx.arc(p.x, p.y, stroke.weight / 2, 0, Math.PI * 2);
+              ctx.fill();
+            });
+          });
+        }
+      });
       if (currentStroke) drawStroke(currentStroke);
     }
     
