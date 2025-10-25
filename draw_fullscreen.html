@@ -85,6 +85,8 @@
   <canvas id="pad"></canvas>
   
   <div id="menu">
+    <button id="clearBtn">Clear</button>
+    
     <select id="lineWeight">
       <option value="1">1px</option>
       <option value="2">2px</option>
@@ -115,9 +117,7 @@
       <option value="radial">Radial (8)</option>
     </select>
     
-    <button id="clearBtn">Clear</button>
     <button id="sewBtn">Sew</button>
-    <button id="closeMenu">Close Menu</button>
   </div>
   
   <div class="status" id="status"></div>
@@ -288,11 +288,6 @@
       currentStroke = null;
       redraw();
       showStatus('Cleared');
-      menu.classList.remove('visible');
-    });
-    
-    // Close menu (kept for manual close if needed)
-    document.getElementById('closeMenu').addEventListener('click', () => {
       menu.classList.remove('visible');
     });
     
