@@ -138,29 +138,42 @@
     
     .flyout button {
       min-width: 40px;
-      padding: 6px;
+      padding: 0;
       font-size: 11px;
-    }
-    
-    .weight-icon {
-      width: 50px;
-      height: 50px;
+      overflow: visible;
+      border: 1px solid #ccc;
+      background: #fff;
       display: flex;
       align-items: center;
       justify-content: center;
+    }
+    
+    .weight-icon {
+      width: 100%;
+      height: 100%;
+      min-height: 50px;
+      display: flex;
+      align-items: flex-end;
+      justify-content: center;
       position: relative;
+      overflow: visible;
     }
     .weight-line {
       background: #000;
       width: 100%;
+      max-height: 50px;
     }
     .weight-label {
       position: absolute;
+      top: 2px;
+      left: 2px;
       background: rgba(255, 255, 255, 0.9);
-      padding: 2px 4px;
-      font-size: 10px;
+      padding: 1px 3px;
+      font-size: 9px;
       border-radius: 2px;
-      z-index: 2;
+      z-index: 10;
+      pointer-events: none;
+      color: #000;
     }
     .color-swatch {
       width: 40px;
@@ -245,34 +258,62 @@
     let color = '#000000';
     let mirrorMode = 'none';
     let currentShape = null; // null for line drawing, or shape name
+    let lineCap = 'round'; // 'round' or 'butt' (square)
     let counter = parseInt(localStorage.getItem('sewCounter') || '1');
     
     // Available options - 49 items (7x7 grid)
-    // Rows 1-5: Line weights (35 weights)
+    // Rows 1-3: Line weights (19 weights + 2 line mode buttons)
     const weights = [
-      1, 1, 2, 3, 5, 8, 13,              // Row 1: Fibonacci 1-13
-      21, 34, 55, 65, 75, 85, 95,        // Row 2: Fibonacci 21, 34, then +10 increments
-      105, 115, 125, 135, 145, 155, 165, // Row 3: +10 increments
-      175, 185, 195, 205, 215, 225, 235, // Row 4: +10 increments
-      245, 255, 265, 275, 285, 295, 300  // Row 5: +10 to 300
+      1, 3,                              // 2 weights < 5px
+      5, 6, 7, 8, 9, 10, 11, 12, 13,    // Row 1 continued + Row 2 start: dense around 13
+      14, 15, 16, 17, 18, 20, 22,       // Row 2 continued: dense around 13
+      25, 30, 40, 55, 75, 100,          // Row 3: spreading out
+      150, 200,                          // 2 weights > 100px
+      'round', 'square'                  // Line mode reset buttons
     ];
     
-    // Rows 6-7: Shapes (14 shapes)
+    // Rows 4-8: Shapes (33 shapes for 7 columns × 5 rows - 2 = 33)
     const shapes = [
-      {name: 'circle', label: '○'},
-      {name: 'square', label: '□'},
-      {name: 'triangle', label: '△'},
+      // Row 4: Celtic knot elements
+      {name: 'curve', label: '⌒'},
+      {name: 'scurve', label: '∽'},
+      {name: 'loop', label: '∞'},
+      {name: 'arc', label: '⌓'},
+      {name: 'crescent', label: '☽'},
+      {name: 'triquetra', label: '◬'},
+      {name: 'knot', label: '⚯'},
+      // Row 5: Texture elements
+      {name: 'dot', label: '•'},
+      {name: 'ring', label: '◦'},
+      {name: 'doublering', label: '◉'},
+      {name: 'quatrefoil', label: '❀'},
+      {name: 'leaf', label: '🍃'},
+      {name: 'teardrop', label: '💧'},
       {name: 'star', label: '★'},
-      {name: 'heart', label: '♥'},
-      {name: 'diamond', label: '◇'},
+      // Row 6: Basic shapes
+      {name: 'ellipse', label: '⬭'},
+      {name: 'maze', label: '◎'},
       {name: 'hexagon', label: '⬡'},
-      {name: 'pentagon', label: '⬠'},
+      {name: 'doublej', label: '⟆'},
+      {name: 'heart', label: '♥'},
       {name: 'cross', label: '✚'},
       {name: 'x', label: '✕'},
-      {name: 'arrowUp', label: '▲'},
+      // Row 7: Arrows & patterns
+      {name: 'smiley', label: '☺'},
       {name: 'arrowRight', label: '▶'},
       {name: 'spiral', label: '◎'},
-      {name: 'wave', label: '〰'}
+      {name: 'wave', label: '〰'},
+      {name: 'zigzag', label: '⩘'},
+      {name: 'chevron', label: '⌃'},
+      {name: 'brackets', label: '〈〉'},
+      // Row 8: Grid patterns
+      {name: 'grid', label: '⊞'},
+      {name: 'isogrid', label: '◊'},
+      {name: 'hatch', label: '⫽'},
+      {name: 'crosshatch', label: '⊠'},
+      {name: 'hexgrid', label: '⬡'},
+      {name: 'brickgrid', label: '▭'},
+      {name: 'infinity', label: '∞'}
     ];
     
     const colors = ['#000000', '#333333', '#666666', '#999999', '#CCCCCC', '#FFFFFF'];
@@ -355,6 +396,30 @@
     const weightFlyout = document.getElementById('weightFlyout');
     weights.forEach(w => {
       const btn = document.createElement('button');
+      
+      // Handle special line mode reset buttons
+      if (w === 'round' || w === 'square') {
+        btn.className = 'weight-btn';
+        btn.style.fontSize = '24px';
+        btn.textContent = w === 'round' ? '●' : '■';
+        
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          currentShape = null; // Reset to line drawing mode
+          lineCap = w === 'round' ? 'round' : 'butt';
+          document.querySelectorAll('.weight-btn').forEach(b => b.classList.remove('active'));
+          document.querySelectorAll('.shape-btn').forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+          showStatus(`Line mode: ${w} cap`);
+          closeFlyouts();
+          menu.classList.remove('visible');
+        });
+        
+        weightFlyout.appendChild(btn);
+        return;
+      }
+      
+      // Normal weight buttons
       btn.className = 'weight-btn';
       if (w === 13) btn.classList.add('active');
       
@@ -363,11 +428,12 @@
       
       const line = document.createElement('div');
       line.className = 'weight-line';
-      line.style.height = Math.min(w, 40) + 'px';
+      // Show actual size up to button size (50px)
+      line.style.height = Math.min(w, 50) + 'px';
       
       icon.appendChild(line);
       
-      // Add label showing pixel size
+      // Add label showing pixel size in bottom-right corner
       const label = document.createElement('div');
       label.className = 'weight-label';
       label.textContent = w + 'px';
@@ -501,6 +567,14 @@
     });
     
     // Menu toggle - tap bottom-left corner
+    let isRotatingShape = false;
+    let shapeRotation = 0;
+    let rotationStartAngle = 0;
+    let shapeAnchorPoint = null;
+    let holdTimer = null;
+    let rotationModeActive = false;
+    const HOLD_DURATION = 500; // milliseconds to hold before rotation activates
+    
     canvas.addEventListener('touchstart', (e) => {
       const touch = e.touches[0];
       const x = touch.clientX;
@@ -510,6 +584,19 @@
       if (x < 100 && y > canvas.height - 100) {
         e.preventDefault();
         menu.classList.toggle('visible');
+        return;
+      }
+      
+      // Bottom-right corner (25x25px) = undo last stroke
+      if (x > canvas.width - 25 && y > canvas.height - 25) {
+        e.preventDefault();
+        if (strokes.length > 0) {
+          strokes.pop();
+          redraw();
+          showStatus('Undo', 1000);
+        } else {
+          showStatus('Nothing to undo', 1000);
+        }
         return;
       }
       
@@ -526,42 +613,103 @@
         weight: lineWeight,
         color: color,
         shape: currentShape,
+        lineCap: lineCap,
+        rotation: 0,
         startPoint: {x, y}
       };
+
+      // If in shape mode, immediately stamp the shape at tap location
+      if (currentShape) {
+        shapeAnchorPoint = {x, y};
+        shapeRotation = 0;
+        rotationModeActive = false;
+        drawStroke(currentStroke);
+        
+        // Start hold timer for rotation mode
+        holdTimer = setTimeout(() => {
+          rotationModeActive = true;
+          showStatus('Rotation active - drag to rotate', 1500);
+        }, HOLD_DURATION);
+      }
     }, {passive: false});
     
     canvas.addEventListener('touchmove', (e) => {
       if (!isDrawing || menu.classList.contains('visible')) return;
       e.preventDefault();
       
-      const touch = e.touches[0];
-      const x = touch.clientX;
-      const y = touch.clientY;
+      // Shape rotation mode: hold activated, now drag to rotate
+      if (currentShape && rotationModeActive) {
+        const touch = e.touches[0];
+        const dx = touch.clientX - shapeAnchorPoint.x;
+        const dy = touch.clientY - shapeAnchorPoint.y;
+        
+        // Calculate angle from anchor point to current touch position
+        // atan2 returns angle in radians: right=0, down=π/2, left=π, up=-π/2
+        const angle = Math.atan2(dy, dx);
+        
+        // Convert to rotation (0° = right/east, rotating clockwise)
+        shapeRotation = angle;
+        currentStroke.rotation = shapeRotation;
+        
+        // Redraw with new rotation
+        redraw();
+        drawStroke(currentStroke);
+        return;
+      }
       
-      currentStroke.points.push({x, y});
-      drawStroke(currentStroke);
+      // If shape mode but rotation not active yet, cancel hold timer on any movement
+      if (currentShape && !rotationModeActive && holdTimer) {
+        clearTimeout(holdTimer);
+        holdTimer = null;
+        return;
+      }
+      
+      // Normal line drawing mode - add points and draw
+      if (!currentShape) {
+        const touch = e.touches[0];
+        const x = touch.clientX;
+        const y = touch.clientY;
+        
+        currentStroke.points.push({x, y});
+        drawStroke(currentStroke);
+      }
     }, {passive: false});
     
     canvas.addEventListener('touchend', (e) => {
       if (!isDrawing) return;
       e.preventDefault();
+      
+      // Clear hold timer if still active
+      if (holdTimer) {
+        clearTimeout(holdTimer);
+        holdTimer = null;
+      }
+      
+      // Reset rotation tracking
+      isRotatingShape = false;
+      rotationModeActive = false;
+      rotationStartAngle = 0;
+      shapeAnchorPoint = null;
+      
       isDrawing = false;
       
-      // Shapes are already drawn during touchmove, just save the stroke
+      // Save the stroke (shape or line)
       strokes.push(currentStroke);
       currentStroke = null;
     });
     
     // Draw a single stroke
     function drawStroke(stroke) {
-      // If shape mode, stamp shapes along the path
+      // If shape mode, stamp shape once at the first point with rotation
       if (stroke.shape && stroke.points.length > 0) {
-        const segments = getMirroredSegments(stroke.points);
+        const pt = stroke.points[0]; // Only use first point
+        const segments = getMirroredSegments([pt]);
+        const rotation = stroke.rotation || 0;
         
-        // Stamp shapes along each mirrored segment
+        // Stamp shape at each mirrored position
         segments.forEach(points => {
-          points.forEach(pt => {
-            drawShape(stroke.shape, pt.x, pt.y, stroke.weight, stroke.color);
+          points.forEach(mirroredPt => {
+            drawShape(stroke.shape, mirroredPt.x, mirroredPt.y, stroke.weight, stroke.color, rotation);
           });
         });
       } else if (!stroke.shape) {
@@ -570,7 +718,7 @@
         
         ctx.strokeStyle = stroke.color;
         ctx.lineWidth = stroke.weight;
-        ctx.lineCap = 'round';
+        ctx.lineCap = stroke.lineCap || 'round';
         ctx.lineJoin = 'round';
         
         // Draw each segment separately
@@ -622,8 +770,17 @@
     }
     
     // Draw complete shape at point
-    function drawShape(shapeName, x, y, weight, color) {
+    function drawShape(shapeName, x, y, weight, color, rotation = 0) {
       const size = weight * 2;
+      ctx.save(); // Save current context state
+      
+      // Apply rotation if specified
+      if (rotation !== 0) {
+        ctx.translate(x, y);
+        ctx.rotate(rotation);
+        ctx.translate(-x, -y);
+      }
+      
       ctx.strokeStyle = color;
       ctx.fillStyle = color;
       ctx.lineWidth = weight / 2;
@@ -636,11 +793,17 @@
         case 'square':
           ctx.rect(x - size, y - size, size * 2, size * 2);
           break;
-        case 'triangle':
-          ctx.moveTo(x, y - size);
-          ctx.lineTo(x + size, y + size);
-          ctx.lineTo(x - size, y + size);
-          ctx.closePath();
+        case 'ellipse':
+          ctx.ellipse(x, y, size * 1.5, size, 0, 0, Math.PI * 2);
+          break;
+        case 'maze':
+          drawMaze(x, y, size);
+          break;
+        case 'doublej':
+          drawDoubleJ(x, y, size);
+          break;
+        case 'smiley':
+          drawSmiley(x, y, size);
           break;
         case 'star':
           drawStar(x, y, 5, size, size / 2);
@@ -648,18 +811,8 @@
         case 'heart':
           drawHeart(x, y, size);
           break;
-        case 'diamond':
-          ctx.moveTo(x, y - size);
-          ctx.lineTo(x + size, y);
-          ctx.lineTo(x, y + size);
-          ctx.lineTo(x - size, y);
-          ctx.closePath();
-          break;
         case 'hexagon':
           drawPolygon(x, y, 6, size);
-          break;
-        case 'pentagon':
-          drawPolygon(x, y, 5, size);
           break;
         case 'cross':
           const w = size / 3;
@@ -671,13 +824,6 @@
           ctx.lineTo(x + size, y + size);
           ctx.moveTo(x + size, y - size);
           ctx.lineTo(x - size, y + size);
-          break;
-        case 'arrowUp':
-          ctx.moveTo(x, y - size);
-          ctx.lineTo(x + size, y + size / 2);
-          ctx.lineTo(x, y);
-          ctx.lineTo(x - size, y + size / 2);
-          ctx.closePath();
           break;
         case 'arrowRight':
           ctx.moveTo(x + size, y);
@@ -692,8 +838,81 @@
         case 'wave':
           drawWave(x, y, size);
           break;
+        case 'zigzag':
+          drawZigzag(x, y, size);
+          break;
+        case 'chevron':
+          drawChevron(x, y, size);
+          break;
+        case 'brackets':
+          drawBrackets(x, y, size);
+          break;
+        case 'grid':
+          drawGrid(x, y, size);
+          break;
+        case 'isogrid':
+          drawIsogrid(x, y, size);
+          break;
+        case 'hatch':
+          drawHatch(x, y, size);
+          break;
+        case 'crosshatch':
+          drawCrosshatch(x, y, size);
+          break;
+        case 'hexgrid':
+          drawHexgrid(x, y, size);
+          break;
+        case 'brickgrid':
+          drawBrickgrid(x, y, size);
+          break;
+        case 'infinity':
+          drawInfinity(x, y, size);
+          break;
+        case 'curve':
+          drawCurve(x, y, size);
+          break;
+        case 'scurve':
+          drawSCurve(x, y, size);
+          break;
+        case 'loop':
+          drawLoop(x, y, size);
+          break;
+        case 'arc':
+          drawArc(x, y, size);
+          break;
+        case 'crescent':
+          drawCrescent(x, y, size);
+          break;
+        case 'triquetra':
+          drawTriquetra(x, y, size);
+          break;
+        case 'knot':
+          drawKnot(x, y, size);
+          break;
+        case 'dot':
+          ctx.arc(x, y, size / 2, 0, Math.PI * 2);
+          ctx.fill();
+          break;
+        case 'ring':
+          ctx.arc(x, y, size, 0, Math.PI * 2);
+          break;
+        case 'doublering':
+          ctx.arc(x, y, size, 0, Math.PI * 2);
+          ctx.moveTo(x + size / 2, y);
+          ctx.arc(x, y, size / 2, 0, Math.PI * 2);
+          break;
+        case 'quatrefoil':
+          drawQuatrefoil(x, y, size);
+          break;
+        case 'leaf':
+          drawLeaf(x, y, size);
+          break;
+        case 'teardrop':
+          drawTeardrop(x, y, size);
+          break;
       }
       ctx.stroke();
+      ctx.restore(); // Restore context state (removes rotation)
     }
     
     // Helper functions for complex shapes
@@ -742,6 +961,233 @@
         ctx.lineTo(xPos, yPos);
       }
     }
+
+    function drawMaze(x, y, size) {
+      // Circular maze pattern
+      ctx.arc(x, y, size, 0, Math.PI * 2);
+      ctx.moveTo(x + size * 0.66, y);
+      ctx.arc(x, y, size * 0.66, 0, Math.PI * 2);
+      ctx.moveTo(x + size * 0.33, y);
+      ctx.arc(x, y, size * 0.33, 0, Math.PI * 2);
+      // Radial lines
+      for (let i = 0; i < 4; i++) {
+        const angle = (i * Math.PI) / 2;
+        ctx.moveTo(x, y);
+        ctx.lineTo(x + Math.cos(angle) * size, y + Math.sin(angle) * size);
+      }
+    }
+
+    function drawDoubleJ(x, y, size) {
+      // First J
+      ctx.moveTo(x - size / 2, y - size);
+      ctx.lineTo(x - size / 2, y + size / 2);
+      ctx.quadraticCurveTo(x - size / 2, y + size, x - size, y + size);
+      // Second J (mirrored)
+      ctx.moveTo(x + size / 2, y - size);
+      ctx.lineTo(x + size / 2, y + size / 2);
+      ctx.quadraticCurveTo(x + size / 2, y + size, x + size, y + size);
+    }
+
+    function drawSmiley(x, y, size) {
+      // Face circle
+      ctx.arc(x, y, size, 0, Math.PI * 2);
+      // Eyes
+      ctx.moveTo(x - size / 3, y - size / 3);
+      ctx.arc(x - size / 3, y - size / 3, size / 8, 0, Math.PI * 2);
+      ctx.moveTo(x + size / 3, y - size / 3);
+      ctx.arc(x + size / 3, y - size / 3, size / 8, 0, Math.PI * 2);
+      // Smile
+      ctx.moveTo(x - size / 2, y + size / 4);
+      ctx.quadraticCurveTo(x, y + size / 2, x + size / 2, y + size / 4);
+    }
+
+    function drawCurve(x, y, size) {
+      ctx.moveTo(x - size, y);
+      ctx.quadraticCurveTo(x - size, y - size, x, y - size);
+    }
+
+    function drawSCurve(x, y, size) {
+      ctx.moveTo(x - size, y - size / 2);
+      ctx.bezierCurveTo(x - size / 2, y - size, x + size / 2, y, x + size, y + size / 2);
+    }
+
+    function drawLoop(x, y, size) {
+      ctx.moveTo(x - size, y);
+      ctx.bezierCurveTo(x - size, y - size, x + size, y - size, x + size, y);
+      ctx.bezierCurveTo(x + size, y + size, x - size, y + size, x - size, y);
+    }
+
+    function drawArc(x, y, size) {
+      ctx.arc(x, y, size, 0, Math.PI);
+    }
+
+    function drawCrescent(x, y, size) {
+      ctx.arc(x, y, size, 0.2 * Math.PI, 1.8 * Math.PI);
+      ctx.arc(x + size / 3, y, size * 0.7, 1.8 * Math.PI, 0.2 * Math.PI, true);
+    }
+
+    function drawTriquetra(x, y, size) {
+      for (let i = 0; i < 3; i++) {
+        const angle = (i * 2 * Math.PI) / 3 - Math.PI / 2;
+        const cx = x + Math.cos(angle) * size / 2;
+        const cy = y + Math.sin(angle) * size / 2;
+        ctx.moveTo(cx + size * 0.7, cy);
+        ctx.arc(cx, cy, size * 0.7, 0, Math.PI * 2);
+      }
+    }
+
+    function drawKnot(x, y, size) {
+      ctx.moveTo(x - size, y - size);
+      ctx.bezierCurveTo(x - size / 2, y - size / 2, x + size / 2, y - size / 2, x + size, y - size);
+      ctx.bezierCurveTo(x + size, y - size / 2, x + size, y + size / 2, x + size, y + size);
+      ctx.bezierCurveTo(x + size / 2, y + size / 2, x - size / 2, y + size / 2, x - size, y + size);
+      ctx.bezierCurveTo(x - size, y + size / 2, x - size, y - size / 2, x - size, y - size);
+    }
+
+    function drawQuatrefoil(x, y, size) {
+      for (let i = 0; i < 4; i++) {
+        const angle = (i * Math.PI) / 2;
+        const cx = x + Math.cos(angle) * size / 2;
+        const cy = y + Math.sin(angle) * size / 2;
+        ctx.moveTo(cx + size / 2, cy);
+        ctx.arc(cx, cy, size / 2, 0, Math.PI * 2);
+      }
+    }
+
+    function drawLeaf(x, y, size) {
+      ctx.moveTo(x, y - size);
+      ctx.quadraticCurveTo(x + size, y - size / 2, x, y + size);
+      ctx.quadraticCurveTo(x - size, y - size / 2, x, y - size);
+    }
+
+    function drawTeardrop(x, y, size) {
+      ctx.moveTo(x, y - size);
+      ctx.bezierCurveTo(x + size, y - size / 2, x + size, y + size / 2, x, y + size);
+      ctx.bezierCurveTo(x - size, y + size / 2, x - size, y - size / 2, x, y - size);
+    }
+
+    function drawZigzag(x, y, size) {
+      const points = 4;
+      const width = size * 2;
+      const height = size;
+      ctx.moveTo(x - width / 2, y - height / 2);
+      for (let i = 1; i <= points; i++) {
+        const xPos = x - width / 2 + (i / points) * width;
+        const yPos = i % 2 === 0 ? y - height / 2 : y + height / 2;
+        ctx.lineTo(xPos, yPos);
+      }
+    }
+
+    function drawChevron(x, y, size) {
+      ctx.moveTo(x - size, y + size / 2);
+      ctx.lineTo(x, y - size / 2);
+      ctx.lineTo(x + size, y + size / 2);
+    }
+
+    function drawBrackets(x, y, size) {
+      ctx.moveTo(x - size / 2, y - size);
+      ctx.lineTo(x - size, y);
+      ctx.lineTo(x - size / 2, y + size);
+      ctx.moveTo(x + size / 2, y - size);
+      ctx.lineTo(x + size, y);
+      ctx.lineTo(x + size / 2, y + size);
+    }
+
+    function drawGrid(x, y, size) {
+      const gridSize = 3;
+      const cellSize = (size * 2) / gridSize;
+      // Vertical lines
+      for (let i = 0; i <= gridSize; i++) {
+        const xPos = x - size + i * cellSize;
+        ctx.moveTo(xPos, y - size);
+        ctx.lineTo(xPos, y + size);
+      }
+      // Horizontal lines
+      for (let i = 0; i <= gridSize; i++) {
+        const yPos = y - size + i * cellSize;
+        ctx.moveTo(x - size, yPos);
+        ctx.lineTo(x + size, yPos);
+      }
+    }
+
+    function drawIsogrid(x, y, size) {
+      // Diamond/isometric grid pattern
+      const step = size / 2;
+      // Vertical diamonds
+      ctx.moveTo(x, y - size);
+      ctx.lineTo(x + size, y);
+      ctx.lineTo(x, y + size);
+      ctx.lineTo(x - size, y);
+      ctx.closePath();
+      // Interior cross
+      ctx.moveTo(x - size, y);
+      ctx.lineTo(x + size, y);
+      ctx.moveTo(x, y - size);
+      ctx.lineTo(x, y + size);
+    }
+
+    function drawHatch(x, y, size) {
+      // Parallel diagonal lines
+      const lines = 5;
+      const spacing = (size * 2) / lines;
+      for (let i = 0; i < lines; i++) {
+        const offset = -size + i * spacing;
+        ctx.moveTo(x + offset - size, y - size);
+        ctx.lineTo(x + offset + size, y + size);
+      }
+    }
+
+    function drawCrosshatch(x, y, size) {
+      // Diagonal lines in both directions
+      const lines = 4;
+      const spacing = (size * 2) / lines;
+      // Forward diagonal
+      for (let i = 0; i < lines; i++) {
+        const offset = -size + i * spacing;
+        ctx.moveTo(x + offset - size, y - size);
+        ctx.lineTo(x + offset + size, y + size);
+      }
+      // Backward diagonal
+      for (let i = 0; i < lines; i++) {
+        const offset = -size + i * spacing;
+        ctx.moveTo(x + offset + size, y - size);
+        ctx.lineTo(x + offset - size, y + size);
+      }
+    }
+
+    function drawHexgrid(x, y, size) {
+      // Hexagonal grid cell
+      drawPolygon(x, y, 6, size);
+      // Inner hexagons
+      drawPolygon(x, y, 6, size / 2);
+    }
+
+    function drawBrickgrid(x, y, size) {
+      // Brick/offset grid pattern
+      const brickWidth = size;
+      const brickHeight = size / 2;
+      // Top brick
+      ctx.rect(x - brickWidth / 2, y - size, brickWidth, brickHeight);
+      // Bottom left brick
+      ctx.rect(x - brickWidth, y - size + brickHeight, brickWidth, brickHeight);
+      // Bottom right brick
+      ctx.rect(x, y - size + brickHeight, brickWidth, brickHeight);
+      // Bottom row
+      ctx.rect(x - brickWidth / 2, y + brickHeight - size, brickWidth, brickHeight);
+    }
+
+    function drawInfinity(x, y, size) {
+      // Infinity symbol (lemniscate) using two circles connected
+      const radius = size * 0.5;
+      const offset = size * 0.5;
+      
+      // Left loop
+      ctx.arc(x - offset, y, radius, 0, Math.PI * 2);
+      
+      // Right loop
+      ctx.moveTo(x + offset + radius, y);
+      ctx.arc(x + offset, y, radius, 0, Math.PI * 2);
+    }
     
     // Get mirrored points (for saving) based on mode
     function getMirroredPoints(points) {
@@ -763,6 +1209,7 @@
     document.getElementById('clearBtn').addEventListener('click', () => {
       strokes = [];
       currentStroke = null;
+      currentShape = null; // Reset to line drawing mode
       redraw();
       showStatus('Cleared');
       closeFlyouts();
@@ -819,9 +1266,9 @@
       showStatus('Tap bottom-left corner for menu', 3000);
     }, 500);
     
-    // Prevent scrolling/zooming
+    // Prevent scrolling/zooming (but allow two-finger rotation in shape mode)
     document.addEventListener('touchmove', (e) => {
-      if (e.touches.length > 1) e.preventDefault();
+      if (e.touches.length > 1 && !currentShape) e.preventDefault();
     }, {passive: false});
     
     // Request fullscreen on load (if supported)
